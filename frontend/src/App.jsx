@@ -8,6 +8,7 @@ import Services from './pages/Services'
 import Machines from './pages/Machines'
 import Assemblies from './pages/Assemblies'
 import Orders from './pages/Orders'
+import WorkOrders from './pages/WorkOrders'
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token')
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="/machines" element={<PrivateRoute><Machines /></PrivateRoute>} />
         <Route path="/assemblages" element={<PrivateRoute><Assemblies /></PrivateRoute>} />
         <Route path="/commandes" element={<PrivateRoute><Orders /></PrivateRoute>} />
+        <Route path="/of" element={<PrivateRoute><WorkOrders /></PrivateRoute>} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>

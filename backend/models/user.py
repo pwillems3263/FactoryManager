@@ -93,6 +93,8 @@ class User(Base):
             "components":     self.niveau >= 2,
             "assemblies":     self.niveau >= 2,
             "orders":         self.niveau >= 2,
+            "work_orders":    self.niveau >= 2,
+            "time_tracking":  self.niveau >= 1,
             # Level 3 — Manager and above
             "machines":       self.niveau >= 3,
             "materials":      self.niveau >= 3,

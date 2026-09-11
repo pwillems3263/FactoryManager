@@ -9,6 +9,7 @@ from routers import services as services_router
 from routers import machines as machines_router
 from routers import assemblages as assemblages_router
 from routers import commandes as commandes_router
+from routers import of as of_router
 
 app = FastAPI(title="FactoryManager API", version="2.0.0")
 app.add_middleware(CORSMiddleware,
@@ -24,6 +25,7 @@ app.include_router(services_router.router)
 app.include_router(machines_router.router)
 app.include_router(assemblages_router.router)
 app.include_router(commandes_router.router)
+app.include_router(of_router.router)
 
 @app.get("/", tags=["Status"])
 def health_check():
