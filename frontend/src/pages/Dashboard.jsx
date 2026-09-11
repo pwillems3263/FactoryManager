@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import Layout from '../components/Layout'
 import api from '../api/client'
 import './Dashboard.css'
 
@@ -16,8 +16,6 @@ export default function Dashboard() {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
-  const navigate              = useNavigate()
-  const user = JSON.parse(localStorage.getItem('user') || '{}')
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -35,155 +33,56 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboard()
-    // Rafraîchissement automatique toutes les 60 secondes
     const interval = setInterval(fetchDashboard, 60000)
     return () => clearInterval(interval)
   }, [fetchDashboard])
 
-  const handleLogout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    navigate('/login')
-  }
-
   if (loading) return (
-    <div className="dashboard-loading">
-      <div className="spinner" />
-      <p>Chargement du dashboard...</p>
-    </div>
+    <Layout>
+      <div className="dashboard-loading">
+        <div className="spinner" />
+        <p>Chargement du dashboard...</p>
+      </div>
+    </Layout>
   )
 
   return (
-    <div className="dashboard">
-      {/* Header */}
-      <header className="dashboard-header">
-        <div className="header-left">
-          <span className="header-logo">🏭</span>
-          <h1>FactoryManager</h1>
-        </div>
-        <div className="header-right">
-          <span className="header-user">
-            👤 {user.full_name || user.username}
-          </span>
-          <button className="logout-btn" onClick={handleLogout}>
-            Déconnexion
-          </button>
-        </div>
-      </header>
+    <Layout>
+      <div className="dashboard-title-row">
+        <h2>Dashboard</h2>
+        {data && <span className="last-update">Mis à jour : {data.updated_at}</span>}
+      </div>
 
-      <main className="dashboard-main">
-        <div className="dashboard-title-row">
-          <h2>Dashboard</h2>
-          {data && (
-            <span className="last-update">
-              Mis à jour : {data.updated_at}
-            </span>
-          )}
+      {error && <div className="dashboard-error">{error}</div>}
+
+      {data && <>
+        {/* KPIs */}
+        <div className="kpi-grid">
+          <KpiCard label="Commandes en production" value={data.kpis.commandes_en_production} color="#3498db" />
+          <KpiCard label="OFs à planifier"         value={data.kpis.ofs_a_planifier}         color="#e67e22" />
+          <KpiCard label="OFs en cours"            value={data.kpis.ofs_en_cours}            color="#8e44ad" />
+          <KpiCard label="Rebuts ce mois"          value={data.kpis.rebuts_ce_mois}          color="#e74c3c" />
+          <KpiCard label="Machines disponibles"    value={data.kpis.machines_disponibles}    color="#27ae60" />
+          <KpiCard label="Machines à l'arrêt"      value={data.kpis.machines_arret}          color="#e74c3c" />
         </div>
 
-        {error && <div className="dashboard-error">{error}</div>}
-
-        {data && <>
-          {/* KPIs */}
-          <div className="kpi-grid">
-            <KpiCard label="Commandes en production" value={data.kpis.commandes_en_production} color="#3498db" />
-            <KpiCard label="OFs à planifier"         value={data.kpis.ofs_a_planifier}         color="#e67e22" />
-            <KpiCard label="OFs en cours"            value={data.kpis.ofs_en_cours}            color="#8e44ad" />
-            <KpiCard label="Rebuts ce mois"          value={data.kpis.rebuts_ce_mois}          color="#e74c3c" />
-            <KpiCard label="Machines disponibles"    value={data.kpis.machines_disponibles}    color="#27ae60" />
-            <KpiCard label="Machines à l'arrêt"      value={data.kpis.machines_arret}          color="#e74c3c" />
-          </div>
-
-          {/* Deux colonnes */}
-          <div className="dashboard-cols">
-            {/* OFs urgents */}
-            <div className="dashboard-card">
-              <h3>🔴 OFs urgents (priorité 1-2)</h3>
-              {data.ofs_urgents.length === 0
-                ? <p className="empty">Aucun OF urgent</p>
-                : (
-                  <table className="dash-table">
-                    <thead>
-                      <tr>
-                        <th>Assemblage</th>
-                        <th>Qté</th>
-                        <th>Priorité</th>
-                        <th>Statut</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.ofs_urgents.map((of) => (
-                        <tr key={of.id_of_assemblage}>
-                          <td>{of.assemblage_nom}</td>
-                          <td>{of.quantite}</td>
-                          <td style={{ color: '#e74c3c', fontWeight: 700 }}>{of.priorite}</td>
-                          <td>
-                            <span className="statut-badge" style={{ background: STATUT_COLORS[of.statut] || '#3498db' }}>
-                              {of.statut_label}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )
-              }
-            </div>
-
-            {/* Machines en arrêt */}
-            <div className="dashboard-card">
-              <h3>⚠️ Événements machines</h3>
-              {data.arrets_machines.length === 0
-                ? <p className="empty">Aucun arrêt machine</p>
-                : (
-                  <table className="dash-table">
-                    <thead>
-                      <tr>
-                        <th>Machine</th>
-                        <th>Type</th>
-                        <th>Depuis</th>
-                        <th>Durée (h)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.arrets_machines.map((a) => (
-                        <tr key={a.id_arret}>
-                          <td>{a.machine_nom}</td>
-                          <td>{a.type_arret}</td>
-                          <td>{a.depuis}</td>
-                          <td style={{ color: '#e74c3c', fontWeight: 700 }}>{a.duree_h}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )
-              }
-            </div>
-          </div>
-
-          {/* OFs en retard */}
+        {/* Deux colonnes */}
+        <div className="dashboard-cols">
           <div className="dashboard-card">
-            <h3>⏰ OFs en retard</h3>
-            {data.ofs_retard.length === 0
-              ? <p className="empty">Aucun OF en retard ✅</p>
+            <h3>🔴 OFs urgents (priorité 1-2)</h3>
+            {data.ofs_urgents.length === 0
+              ? <p className="empty">Aucun OF urgent</p>
               : (
                 <table className="dash-table">
                   <thead>
-                    <tr>
-                      <th>Code OF</th>
-                      <th>Composant</th>
-                      <th>Qté</th>
-                      <th>Date prévue</th>
-                      <th>Statut</th>
-                    </tr>
+                    <tr><th>Assemblage</th><th>Qté</th><th>Priorité</th><th>Statut</th></tr>
                   </thead>
                   <tbody>
-                    {data.ofs_retard.map((of) => (
-                      <tr key={of.id_of}>
-                        <td>{of.code_of || '—'}</td>
-                        <td>{of.composant_nom}</td>
+                    {data.ofs_urgents.map((of) => (
+                      <tr key={of.id_of_assemblage}>
+                        <td>{of.assemblage_nom}</td>
                         <td>{of.quantite}</td>
-                        <td style={{ color: '#e74c3c' }}>{of.date_fin_prevue}</td>
+                        <td style={{ color: '#e74c3c', fontWeight: 700 }}>{of.priorite}</td>
                         <td>
                           <span className="statut-badge" style={{ background: STATUT_COLORS[of.statut] || '#3498db' }}>
                             {of.statut_label}
@@ -196,9 +95,63 @@ export default function Dashboard() {
               )
             }
           </div>
-        </>}
-      </main>
-    </div>
+
+          <div className="dashboard-card">
+            <h3>⚠️ Événements machines</h3>
+            {data.arrets_machines.length === 0
+              ? <p className="empty">Aucun arrêt machine</p>
+              : (
+                <table className="dash-table">
+                  <thead>
+                    <tr><th>Machine</th><th>Type</th><th>Depuis</th><th>Durée (h)</th></tr>
+                  </thead>
+                  <tbody>
+                    {data.arrets_machines.map((a) => (
+                      <tr key={a.id_arret}>
+                        <td>{a.machine_nom}</td>
+                        <td>{a.type_arret}</td>
+                        <td>{a.depuis}</td>
+                        <td style={{ color: '#e74c3c', fontWeight: 700 }}>{a.duree_h}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )
+            }
+          </div>
+        </div>
+
+        {/* OFs en retard */}
+        <div className="dashboard-card">
+          <h3>⏰ OFs en retard</h3>
+          {data.ofs_retard.length === 0
+            ? <p className="empty">Aucun OF en retard ✅</p>
+            : (
+              <table className="dash-table">
+                <thead>
+                  <tr><th>Code OF</th><th>Composant</th><th>Qté</th><th>Date prévue</th><th>Statut</th></tr>
+                </thead>
+                <tbody>
+                  {data.ofs_retard.map((of) => (
+                    <tr key={of.id_of}>
+                      <td>{of.code_of || '—'}</td>
+                      <td>{of.composant_nom}</td>
+                      <td>{of.quantite}</td>
+                      <td style={{ color: '#e74c3c' }}>{of.date_fin_prevue}</td>
+                      <td>
+                        <span className="statut-badge" style={{ background: STATUT_COLORS[of.statut] || '#3498db' }}>
+                          {of.statut_label}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          }
+        </div>
+      </>}
+    </Layout>
   )
 }
 
