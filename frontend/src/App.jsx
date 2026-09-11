@@ -11,6 +11,7 @@ import Orders from './pages/Orders'
 import WorkOrders from './pages/WorkOrders'
 import ProductionTrack from './pages/ProductionTrack'
 import TimeTracking from './pages/TimeTracking'
+import Users from './pages/Users'
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token')
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="/of" element={<PrivateRoute><WorkOrders /></PrivateRoute>} />
         <Route path="/suivi" element={<PrivateRoute><ProductionTrack /></PrivateRoute>} />
         <Route path="/pointage" element={<PrivateRoute><TimeTracking /></PrivateRoute>} />
+        <Route path="/utilisateurs" element={<PrivateRoute><Users /></PrivateRoute>} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
