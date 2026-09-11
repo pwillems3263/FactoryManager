@@ -6,6 +6,7 @@ from routers import composants as composants_router
 from routers import matieres as matieres_router
 from routers import pieces_externes as pieces_router
 from routers import services as services_router
+from routers import machines as machines_router
 
 app = FastAPI(title="FactoryManager API", version="2.0.0")
 app.add_middleware(CORSMiddleware,
@@ -18,6 +19,7 @@ app.include_router(composants_router.router)
 app.include_router(matieres_router.router)
 app.include_router(pieces_router.router)
 app.include_router(services_router.router)
+app.include_router(machines_router.router)
 
 @app.get("/", tags=["Status"])
 def health_check():

@@ -5,6 +5,7 @@ import Composants from './pages/Composants'
 import Matieres from './pages/Matieres'
 import PiecesExternes from './pages/PiecesExternes'
 import Services from './pages/Services'
+import Machines from './pages/Machines'
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token')
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/matieres" element={<PrivateRoute><Matieres /></PrivateRoute>} />
         <Route path="/pieces-ext" element={<PrivateRoute><PiecesExternes /></PrivateRoute>} />
         <Route path="/services" element={<PrivateRoute><Services /></PrivateRoute>} />
+        <Route path="/machines" element={<PrivateRoute><Machines /></PrivateRoute>} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
