@@ -11,7 +11,7 @@ const MENU = [
   { path: '/assemblages',  icon: '🔗', label: 'Assemblies',       ready: true },
   { path: '/commandes',    icon: '📋', label: 'Orders',           ready: true },
   { path: '/of',           icon: '🏭', label: 'Work Orders',      ready: true },
-  { path: '/suivi',        icon: '📈', label: 'Production Track', ready: false },
+  { path: '/suivi',        icon: '📈', label: 'Production Track', ready: true },
   { path: '/pointage',     icon: '⏱️', label: 'Time Tracking',    ready: false },
   { path: '/planning',     icon: '📅', label: 'Planning',         ready: false },
   { path: '/utilisateurs', icon: '👥', label: 'Users',            ready: false },
@@ -45,6 +45,7 @@ export default function Sidebar() {
     </aside>
   )
 }
+
 
 
 
