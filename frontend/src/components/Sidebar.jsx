@@ -8,7 +8,7 @@ const MENU = [
   { path: '/pieces-ext',   icon: '🔩', label: 'External Parts',   ready: true },
   { path: '/services',     icon: '⚙️', label: 'Services',         ready: true },
   { path: '/machines',     icon: '🏗️', label: 'Machines',         ready: true },
-  { path: '/assemblages',  icon: '🔗', label: 'Assemblies',       ready: false },
+  { path: '/assemblages',  icon: '🔗', label: 'Assemblies',       ready: true },
   { path: '/commandes',    icon: '📋', label: 'Orders',           ready: false },
   { path: '/of',           icon: '🏭', label: 'Work Orders',      ready: false },
   { path: '/suivi',        icon: '📈', label: 'Production Track', ready: false },
@@ -45,6 +45,7 @@ export default function Sidebar() {
     </aside>
   )
 }
+
 
 
 
