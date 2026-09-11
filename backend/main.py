@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routers import auth as auth_router
 from routers import dashboard as dashboard_router
 from routers import composants as composants_router
+from routers import matieres as matieres_router
 
 app = FastAPI(
     title="FactoryManager API",
@@ -21,6 +22,7 @@ app.add_middleware(
 app.include_router(auth_router.router)
 app.include_router(dashboard_router.router)
 app.include_router(composants_router.router)
+app.include_router(matieres_router.router)
 
 @app.get("/", tags=["Statut"])
 def health_check():

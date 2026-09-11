@@ -4,7 +4,7 @@ import './Sidebar.css'
 const MENU = [
   { path: '/dashboard',    icon: '📊', label: 'Dashboard',        ready: true  },
   { path: '/composants',   icon: '📦', label: 'Components',       ready: true  },
-  { path: '/matieres',     icon: '🧱', label: 'Raw Materials',    ready: false },
+  { path: '/matieres',     icon: '🧱', label: 'Raw Materials',    ready: true },
   { path: '/pieces-ext',   icon: '🔩', label: 'External Parts',   ready: false },
   { path: '/services',     icon: '⚙️', label: 'Services',         ready: false },
   { path: '/machines',     icon: '🏗️', label: 'Machines',         ready: false },
@@ -45,3 +45,4 @@ export default function Sidebar() {
     </aside>
   )
 }
+
