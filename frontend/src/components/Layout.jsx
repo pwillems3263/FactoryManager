@@ -3,7 +3,7 @@ import Sidebar from './Sidebar'
 import './Layout.css'
 
 export default function Layout({ children }) {
-  const navigate  = useNavigate()
+  const navigate = useNavigate()
   const user = JSON.parse(localStorage.getItem('user') || '{}')
 
   const handleLogout = () => {
@@ -14,7 +14,6 @@ export default function Layout({ children }) {
 
   return (
     <div className="layout">
-      {/* Header global */}
       <header className="layout-header">
         <div className="header-left">
           <span className="header-logo">🏭</span>
@@ -22,18 +21,12 @@ export default function Layout({ children }) {
         </div>
         <div className="header-right">
           <span className="header-user">👤 {user.full_name || user.username}</span>
-          <button className="logout-btn" onClick={handleLogout}>
-            Déconnexion
-          </button>
+          <button className="logout-btn" onClick={handleLogout}>Logout</button>
         </div>
       </header>
-
-      {/* Corps : sidebar + contenu */}
       <div className="layout-body">
         <Sidebar />
-        <main className="layout-content">
-          {children}
-        </main>
+        <main className="layout-content">{children}</main>
       </div>
     </div>
   )

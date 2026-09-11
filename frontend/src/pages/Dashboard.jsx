@@ -12,6 +12,15 @@ const STATUT_COLORS = {
   annule:      '#95a5a6',
 }
 
+const STATUT_LABELS = {
+  en_cours:    'In Progress',
+  planifie:    'Planned',
+  a_planifier: 'To Schedule',
+  termine:     'Completed',
+  terminee:    'Completed',
+  annule:      'Cancelled',
+}
+
 export default function Dashboard() {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
@@ -23,9 +32,7 @@ export default function Dashboard() {
       setData(d)
       setError('')
     } catch (err) {
-      if (err.response?.status !== 401) {
-        setError('Erreur lors du chargement des données')
-      }
+      if (err.response?.status !== 401) setError('Error loading dashboard data')
     } finally {
       setLoading(false)
     }
@@ -41,7 +48,7 @@ export default function Dashboard() {
     <Layout>
       <div className="dashboard-loading">
         <div className="spinner" />
-        <p>Chargement du dashboard...</p>
+        <p>Loading dashboard...</p>
       </div>
     </Layout>
   )
@@ -50,32 +57,30 @@ export default function Dashboard() {
     <Layout>
       <div className="dashboard-title-row">
         <h2>Dashboard</h2>
-        {data && <span className="last-update">Mis à jour : {data.updated_at}</span>}
+        {data && <span className="last-update">Updated: {data.updated_at}</span>}
       </div>
 
       {error && <div className="dashboard-error">{error}</div>}
 
       {data && <>
-        {/* KPIs */}
         <div className="kpi-grid">
-          <KpiCard label="Commandes en production" value={data.kpis.commandes_en_production} color="#3498db" />
-          <KpiCard label="OFs à planifier"         value={data.kpis.ofs_a_planifier}         color="#e67e22" />
-          <KpiCard label="OFs en cours"            value={data.kpis.ofs_en_cours}            color="#8e44ad" />
-          <KpiCard label="Rebuts ce mois"          value={data.kpis.rebuts_ce_mois}          color="#e74c3c" />
-          <KpiCard label="Machines disponibles"    value={data.kpis.machines_disponibles}    color="#27ae60" />
-          <KpiCard label="Machines à l'arrêt"      value={data.kpis.machines_arret}          color="#e74c3c" />
+          <KpiCard label="Orders in Production"  value={data.kpis.commandes_en_production} color="#3498db" />
+          <KpiCard label="WOs to Schedule"       value={data.kpis.ofs_a_planifier}         color="#e67e22" />
+          <KpiCard label="WOs in Progress"       value={data.kpis.ofs_en_cours}            color="#8e44ad" />
+          <KpiCard label="Scraps this Month"     value={data.kpis.rebuts_ce_mois}          color="#e74c3c" />
+          <KpiCard label="Machines Available"    value={data.kpis.machines_disponibles}    color="#27ae60" />
+          <KpiCard label="Machines Down"         value={data.kpis.machines_arret}          color="#e74c3c" />
         </div>
 
-        {/* Deux colonnes */}
         <div className="dashboard-cols">
           <div className="dashboard-card">
-            <h3>🔴 OFs urgents (priorité 1-2)</h3>
+            <h3>🔴 Urgent Work Orders (priority 1-2)</h3>
             {data.ofs_urgents.length === 0
-              ? <p className="empty">Aucun OF urgent</p>
+              ? <p className="empty">No urgent work orders</p>
               : (
                 <table className="dash-table">
                   <thead>
-                    <tr><th>Assemblage</th><th>Qté</th><th>Priorité</th><th>Statut</th></tr>
+                    <tr><th>Assembly</th><th>Qty</th><th>Priority</th><th>Status</th></tr>
                   </thead>
                   <tbody>
                     {data.ofs_urgents.map((of) => (
@@ -85,7 +90,7 @@ export default function Dashboard() {
                         <td style={{ color: '#e74c3c', fontWeight: 700 }}>{of.priorite}</td>
                         <td>
                           <span className="statut-badge" style={{ background: STATUT_COLORS[of.statut] || '#3498db' }}>
-                            {of.statut_label}
+                            {STATUT_LABELS[of.statut] || of.statut_label}
                           </span>
                         </td>
                       </tr>
@@ -97,13 +102,13 @@ export default function Dashboard() {
           </div>
 
           <div className="dashboard-card">
-            <h3>⚠️ Événements machines</h3>
+            <h3>⚠️ Machine Downtime</h3>
             {data.arrets_machines.length === 0
-              ? <p className="empty">Aucun arrêt machine</p>
+              ? <p className="empty">No machine downtime</p>
               : (
                 <table className="dash-table">
                   <thead>
-                    <tr><th>Machine</th><th>Type</th><th>Depuis</th><th>Durée (h)</th></tr>
+                    <tr><th>Machine</th><th>Type</th><th>Since</th><th>Duration (h)</th></tr>
                   </thead>
                   <tbody>
                     {data.arrets_machines.map((a) => (
@@ -121,15 +126,14 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* OFs en retard */}
         <div className="dashboard-card">
-          <h3>⏰ OFs en retard</h3>
+          <h3>⏰ Late Work Orders</h3>
           {data.ofs_retard.length === 0
-            ? <p className="empty">Aucun OF en retard ✅</p>
+            ? <p className="empty">No late work orders ✅</p>
             : (
               <table className="dash-table">
                 <thead>
-                  <tr><th>Code OF</th><th>Composant</th><th>Qté</th><th>Date prévue</th><th>Statut</th></tr>
+                  <tr><th>WO Code</th><th>Component</th><th>Qty</th><th>Due Date</th><th>Status</th></tr>
                 </thead>
                 <tbody>
                   {data.ofs_retard.map((of) => (
@@ -140,7 +144,7 @@ export default function Dashboard() {
                       <td style={{ color: '#e74c3c' }}>{of.date_fin_prevue}</td>
                       <td>
                         <span className="statut-badge" style={{ background: STATUT_COLORS[of.statut] || '#3498db' }}>
-                          {of.statut_label}
+                          {STATUT_LABELS[of.statut] || of.statut_label}
                         </span>
                       </td>
                     </tr>
