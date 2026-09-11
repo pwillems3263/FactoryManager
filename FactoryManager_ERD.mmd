@@ -1,0 +1,209 @@
+erDiagram
+  commande {
+    int id_commande PK
+    string code_commande
+    string client
+    string numero_externe
+    date date_commande
+    date date_livraison
+    string statut
+  }
+  lignecommande {
+    int id_ligne PK
+    int id_commande FK
+    int id_assemblage FK
+    decimal quantite
+    string code_ligne
+    string statut
+    decimal prix_revient_snapshot
+  }
+  assemblage {
+    int id_assemblage PK
+    string nom
+    string reference
+    string description
+    decimal prix_revient
+    string plan_url
+  }
+  nomenclature {
+    int id_nomenclature PK
+    int id_parent
+    string type_parent
+    decimal quantite
+    int id_composant FK
+    int id_service FK
+    int id_piece_externe FK
+  }
+  composant {
+    int id_composant PK
+    string nom
+    string reference
+    string type
+    int id_matiere_brut FK
+    string forme_brut
+    decimal brut_diametre
+    decimal brut_longueur
+    decimal prix_revient
+  }
+  matierepremiere {
+    int id_matiere PK
+    string nom
+    string unite
+    decimal stock_actuel
+    decimal poids_volumique
+    decimal prix_au_kg
+  }
+  service {
+    int id_service PK
+    string nom
+    string code_produit
+    string type_service
+    decimal cout_horaire
+    decimal cout_fixe
+  }
+  piece_externe {
+    int id_piece_externe PK
+    string nom
+    string code_produit
+    string fournisseur
+    decimal prix_unitaire
+  }
+  gamme {
+    int id_gamme PK
+    int id_composant FK
+    int version
+    boolean active
+  }
+  operation {
+    int id_operation PK
+    int id_gamme FK
+    int id_machine FK
+    int id_piece_externe FK
+    int id_service FK
+    int ordre
+    string description
+    int tps_preparation
+    int tps_execution
+  }
+  operationmatiere {
+    int id_operation FK
+    int id_matiere FK
+    decimal quantite
+  }
+  machine {
+    int id_machine PK
+    string nom
+    string type
+    string statut
+    decimal tarif_horaire
+    decimal cout_operateur
+    boolean travaille_samedi
+    boolean travaille_dimanche
+  }
+  machineshiftconfig {
+    int id_config PK
+    int id_machine FK
+    int shift_index
+    boolean active
+  }
+  arretmachine {
+    int id_arret PK
+    int id_machine FK
+    string type_arret
+    datetime date_debut
+    datetime date_fin
+    string description
+  }
+  ofassemblage {
+    int id_of_assemblage PK
+    int id_ligne FK
+    int id_assemblage FK
+    decimal quantite
+    int priorite
+    string statut
+    datetime date_lancement
+    datetime date_fin_prevue
+  }
+  ordrefabrication {
+    int id_of PK
+    int id_of_assemblage FK
+    int id_composant FK
+    int id_of_parent FK
+    string code_of
+    string type_of
+    decimal quantite
+    string statut
+    decimal prix_revient_snapshot
+  }
+  operationplanifiee {
+    int id_op_plan PK
+    int id_of FK
+    int id_operation FK
+    int id_machine FK
+    int id_service FK
+    string statut
+    datetime date_debut
+    datetime date_fin
+    datetime date_debut_reelle
+    datetime date_fin_reelle
+    int tps_prep_reel
+    int tps_exec_reel
+    decimal quantite_produite
+  }
+  rebut {
+    int id_rebut PK
+    int id_of FK
+    int id_op_plan FK
+    datetime date_constat
+    decimal quantite_rebutee
+    string cause
+    string decision
+  }
+  livraisonpartielle {
+    int id_livraison PK
+    int id_of FK
+    datetime date_livraison
+    decimal quantite
+    string commentaire
+  }
+  user {
+    int id_user PK
+    string username
+    string full_name
+    string password_hash
+    string password_salt
+    int niveau
+    boolean actif
+    datetime created_at
+  }
+
+  commande ||--o{ lignecommande : "has"
+  lignecommande }o--|| assemblage : "orders"
+  assemblage ||--o{ nomenclature : "composed of"
+  nomenclature }o--o| composant : "contains"
+  nomenclature }o--o| service : "contains"
+  nomenclature }o--o| piece_externe : "contains"
+  composant }o--o| matierepremiere : "raw material"
+  composant }o--o| service : "linked service"
+  composant }o--o| piece_externe : "linked part"
+  composant ||--o{ gamme : "has routing"
+  gamme ||--o{ operation : "contains"
+  operation }o--o| machine : "on machine"
+  operation }o--o| piece_externe : "uses part"
+  operation }o--o| service : "uses service"
+  operation ||--o{ operationmatiere : "consumes"
+  operationmatiere }o--|| matierepremiere : "material"
+  machine ||--o{ machineshiftconfig : "shift config"
+  machine ||--o{ arretmachine : "stoppages"
+  lignecommande ||--o{ ofassemblage : "generates"
+  ofassemblage }o--|| assemblage : "produces"
+  ofassemblage ||--o{ ordrefabrication : "contains"
+  ordrefabrication }o--|| composant : "manufactures"
+  ordrefabrication }o--o| ordrefabrication : "parent OF"
+  ordrefabrication ||--o{ operationplanifiee : "planned ops"
+  ordrefabrication ||--o{ rebut : "scrap events"
+  ordrefabrication ||--o{ livraisonpartielle : "deliveries"
+  operationplanifiee }o--|| operation : "based on"
+  operationplanifiee }o--o| machine : "assigned to"
+  operationplanifiee }o--o| service : "service"
+  operationplanifiee ||--o{ rebut : "scrap"
