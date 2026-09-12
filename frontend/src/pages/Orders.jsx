@@ -114,7 +114,7 @@ export default function Orders() {
     try {
       await api.post(`/orders/${selected.id_commande}/lines`, {
         id_assemblage: parseInt(lineAsm),
-        quantite: parseFloat(lineQty),
+        quantite: parseInt(lineQty),
       })
       setShowLineForm(false)
       fetchDetail(selected.id_commande)
@@ -128,6 +128,18 @@ export default function Orders() {
       await api.delete(`/orders/${selected.id_commande}/lines/${id_ligne}`)
       fetchDetail(selected.id_commande); fetchOrders()
     } catch (err) { alert(err.response?.data?.detail || 'Error removing line') }
+  }
+
+  const [releasing, setReleasing] = useState(null)
+  const handleReleaseLine = async (id_ligne) => {
+    if (!window.confirm('Generate Production Orders for this line?')) return
+    setReleasing(id_ligne)
+    try {
+      const { data } = await api.post(`/orders/${selected.id_commande}/lines/${id_ligne}/release`)
+      alert(`${data.message} (${data.nb_ofs} work order${data.nb_ofs > 1 ? 's' : ''} created)`)
+      fetchDetail(selected.id_commande); fetchOrders()
+    } catch (err) { alert(err.response?.data?.detail || 'Error releasing line') }
+    finally { setReleasing(null) }
   }
 
   return (
@@ -245,10 +257,17 @@ export default function Orders() {
                         <td className="td-prix">
                           {l.prix_revient_snapshot != null ? `${parseFloat(l.prix_revient_snapshot).toFixed(2)} €` : '—'}
                         </td>
-                        <td>
+                        <td style={{ display: 'flex', gap: 6 }}>
                           {l.statut === 'on_hold' && (
-                            <button className="btn btn-danger" style={{ padding: '3px 8px', fontSize: '11px' }}
-                              onClick={() => handleDeleteLine(l.id_ligne)}>✕</button>
+                            <>
+                              <button className="btn btn-primary" style={{ padding: '3px 8px', fontSize: '11px' }}
+                                disabled={releasing === l.id_ligne}
+                                onClick={() => handleReleaseLine(l.id_ligne)}>
+                                {releasing === l.id_ligne ? '⏳...' : '🚀 Release'}
+                              </button>
+                              <button className="btn btn-danger" style={{ padding: '3px 8px', fontSize: '11px' }}
+                                onClick={() => handleDeleteLine(l.id_ligne)}>✕</button>
+                            </>
                           )}
                         </td>
                       </tr>
@@ -338,8 +357,12 @@ export default function Orders() {
               </div>
               <div className="form-group">
                 <label>Quantity *</label>
-                <input type="number" step="0.001" min="0.001" value={lineQty}
-                  onChange={e => setLineQty(e.target.value)} />
+                <input type="number" step="1" min="1"
+                  value={lineQty}
+                  onChange={e => {
+                    const v = e.target.value
+                    setLineQty(v === '' ? '' : String(parseInt(v, 10)))
+                  }} />
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowLineForm(false)}>Cancel</button>

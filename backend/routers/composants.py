@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 
 from auth import require_permission
 from database import get_db
-from models import Composant, OrdreFabrication
+from models import Composant, OrdreFabrication, Gamme, Operation, Machine, Service, PieceExterne
+from services.cout_service import recalculer_et_sauvegarder_composant, _recalculer_assemblages_du_composant
 
 router = APIRouter(prefix="/composants", tags=["Composants"])
 
@@ -83,6 +84,59 @@ class ComposantListResponse(BaseModel):
     total:  int
     page:   int
     pages:  int
+
+
+# ─── Schémas Gamme / Operations (Manufacturing Routing) ─────────────────────
+
+class OperationResponse(BaseModel):
+    id_operation:      int
+    ordre:             int
+    description:       Optional[str]
+    tps_preparation:   int
+    tps_execution:     int
+    plan_url:          Optional[str]
+    id_machine:        Optional[int]
+    machine_nom:       Optional[str]
+    id_service:        Optional[int]
+    service_nom:       Optional[str]
+    id_piece_externe:  Optional[int]
+    piece_externe_nom: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class GammeResponse(BaseModel):
+    id_gamme:     int
+    id_composant: int
+    version:      int
+    active:       bool
+    operations:   list[OperationResponse]
+
+
+class OperationCreate(BaseModel):
+    description:      Optional[str] = None
+    tps_preparation:  int = 0
+    tps_execution:    int = 0
+    plan_url:         Optional[str] = None
+    id_machine:       Optional[int] = None
+    id_service:       Optional[int] = None
+    id_piece_externe: Optional[int] = None
+    ordre:            Optional[int] = None  # auto (max+1) si non fourni
+
+
+class OperationUpdate(BaseModel):
+    description:      Optional[str] = None
+    tps_preparation:  Optional[int] = None
+    tps_execution:    Optional[int] = None
+    plan_url:         Optional[str] = None
+    id_machine:       Optional[int] = None
+    id_service:       Optional[int] = None
+    id_piece_externe: Optional[int] = None
+
+
+class MoveOperationRequest(BaseModel):
+    direction: str  # "up" | "down"
 
 
 # ─── Helper ──────────────────────────────────────────────────────────────────
@@ -220,3 +274,170 @@ def supprimer_composant(
 
     db.delete(c)
     db.commit()
+
+
+# ─── Manufacturing Routing (Gamme + Operations) ──────────────────────────────
+# Mirrors the desktop app: routing is managed as part of the Component window,
+# not as a separate module.
+
+def _op_to_response(op: Operation) -> OperationResponse:
+    return OperationResponse(
+        id_operation=op.id_operation,
+        ordre=op.ordre,
+        description=op.description,
+        tps_preparation=op.tps_preparation,
+        tps_execution=op.tps_execution,
+        plan_url=op.plan_url,
+        id_machine=op.id_machine,
+        machine_nom=op.machine.nom if op.machine else None,
+        id_service=op.id_service,
+        service_nom=op.service.nom if op.service else None,
+        id_piece_externe=op.id_piece_externe,
+        piece_externe_nom=op.piece_externe.nom if op.piece_externe else None,
+    )
+
+
+def _get_or_create_gamme(db: Session, id_composant: int) -> Gamme:
+    gamme = db.query(Gamme).filter_by(id_composant=id_composant, active=True).first()
+    if not gamme:
+        gamme = Gamme(id_composant=id_composant, version=1, active=True)
+        db.add(gamme)
+        db.flush()
+    return gamme
+
+
+@router.get("/{id_composant}/gamme", response_model=GammeResponse)
+def get_gamme(
+    id_composant: int,
+    db:           Session = Depends(get_db),
+    _user                 = Depends(require_permission("components")),
+):
+    """Returns the active routing (gamme) for this component, with its steps in order."""
+    if not db.get(Composant, id_composant):
+        raise HTTPException(404, "Composant introuvable")
+
+    gamme = db.query(Gamme).filter_by(id_composant=id_composant, active=True).first()
+    if not gamme:
+        return GammeResponse(id_gamme=0, id_composant=id_composant, version=0,
+                              active=False, operations=[])
+
+    ops = sorted(gamme.operations, key=lambda o: o.ordre)
+    return GammeResponse(
+        id_gamme=gamme.id_gamme, id_composant=id_composant,
+        version=gamme.version, active=gamme.active,
+        operations=[_op_to_response(o) for o in ops],
+    )
+
+
+@router.post("/{id_composant}/gamme/operations", response_model=OperationResponse, status_code=201)
+def add_operation(
+    id_composant: int,
+    payload:      OperationCreate,
+    db:           Session = Depends(get_db),
+    _user                 = Depends(require_permission("components")),
+):
+    """Adds a manufacturing step to this component's active routing (creates the routing if needed)."""
+    if not db.get(Composant, id_composant):
+        raise HTTPException(404, "Composant introuvable")
+    if payload.id_machine and not db.get(Machine, payload.id_machine):
+        raise HTTPException(404, "Machine introuvable")
+    if payload.id_service and not db.get(Service, payload.id_service):
+        raise HTTPException(404, "Service introuvable")
+    if payload.id_piece_externe and not db.get(PieceExterne, payload.id_piece_externe):
+        raise HTTPException(404, "External part introuvable")
+
+    gamme = _get_or_create_gamme(db, id_composant)
+
+    ordre = payload.ordre
+    if not ordre:
+        ordre = (max((o.ordre for o in gamme.operations), default=0)) + 1
+
+    op = Operation(
+        id_gamme=gamme.id_gamme,
+        id_machine=payload.id_machine,
+        id_service=payload.id_service,
+        id_piece_externe=payload.id_piece_externe,
+        ordre=ordre,
+        description=payload.description,
+        tps_preparation=payload.tps_preparation,
+        tps_execution=payload.tps_execution,
+        plan_url=payload.plan_url,
+    )
+    db.add(op); db.commit(); db.refresh(op)
+
+    # Mirrors desktop: recompute this component's cost price, then cascade
+    # to any assemblies that use it.
+    recalculer_et_sauvegarder_composant(db, id_composant)
+    _recalculer_assemblages_du_composant(db, id_composant)
+    db.commit()
+
+    return _op_to_response(op)
+
+
+@router.put("/{id_composant}/gamme/operations/{id_operation}", response_model=OperationResponse)
+def update_operation(
+    id_composant: int,
+    id_operation: int,
+    payload:      OperationUpdate,
+    db:           Session = Depends(get_db),
+    _user                 = Depends(require_permission("components")),
+):
+    op = db.get(Operation, id_operation)
+    if not op or op.gamme.id_composant != id_composant:
+        raise HTTPException(404, "Step not found")
+
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(op, field, value)
+
+    db.commit(); db.refresh(op)
+
+    recalculer_et_sauvegarder_composant(db, id_composant)
+    _recalculer_assemblages_du_composant(db, id_composant)
+    db.commit()
+
+    return _op_to_response(op)
+
+
+@router.delete("/{id_composant}/gamme/operations/{id_operation}", status_code=204)
+def delete_operation(
+    id_composant: int,
+    id_operation: int,
+    db:           Session = Depends(get_db),
+    _user                 = Depends(require_permission("components")),
+):
+    op = db.get(Operation, id_operation)
+    if not op or op.gamme.id_composant != id_composant:
+        raise HTTPException(404, "Step not found")
+    db.delete(op); db.commit()
+
+    recalculer_et_sauvegarder_composant(db, id_composant)
+    _recalculer_assemblages_du_composant(db, id_composant)
+    db.commit()
+
+
+@router.put("/{id_composant}/gamme/operations/{id_operation}/move", response_model=list[OperationResponse])
+def move_operation(
+    id_composant: int,
+    id_operation: int,
+    payload:      MoveOperationRequest,
+    db:           Session = Depends(get_db),
+    _user                 = Depends(require_permission("components")),
+):
+    """Swaps this step's order with its previous ('up') or next ('down') neighbour."""
+    op = db.get(Operation, id_operation)
+    if not op or op.gamme.id_composant != id_composant:
+        raise HTTPException(404, "Step not found")
+
+    ops = sorted(op.gamme.operations, key=lambda o: o.ordre)
+    idx = next(i for i, o in enumerate(ops) if o.id_operation == id_operation)
+
+    if payload.direction == "up" and idx > 0:
+        ops[idx].ordre, ops[idx-1].ordre = ops[idx-1].ordre, ops[idx].ordre
+    elif payload.direction == "down" and idx < len(ops) - 1:
+        ops[idx].ordre, ops[idx+1].ordre = ops[idx+1].ordre, ops[idx].ordre
+    else:
+        raise HTTPException(400, "Cannot move step in that direction")
+
+    db.commit()
+    ops_sorted = sorted(op.gamme.operations, key=lambda o: o.ordre)
+    return [_op_to_response(o) for o in ops_sorted]

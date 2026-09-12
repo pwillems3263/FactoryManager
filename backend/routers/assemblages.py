@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from auth import require_permission
 from database import get_db
 from models import Assemblage, Nomenclature, Composant, Service, PieceExterne
+from services.cout_service import recalculer_assemblage
 
 router = APIRouter(prefix="/assemblies", tags=["Assemblies"])
 
@@ -113,7 +114,10 @@ def _bom_item(n: Nomenclature, db: Session) -> BOMItemResponse:
             item_id=n.id_service,
             item_nom=s.nom if s else "—",
             item_reference=s.code_produit if s else None,
-            item_prix=float(s.cout_horaire) if s and s.cout_horaire else None,
+            # Matches recalculer_assemblage(): fixed cost takes priority,
+            # otherwise fall back to the hourly rate.
+            item_prix=float(s.cout_fixe) if s and s.cout_fixe
+                      else (float(s.cout_horaire) if s and s.cout_horaire else None),
         )
     elif n.id_piece_externe:
         p = db.get(PieceExterne, n.id_piece_externe)
@@ -158,6 +162,19 @@ def get_assembly(id_assemblage: int, db: Session = Depends(get_db),
     a = db.get(Assemblage, id_assemblage)
     if not a:
         raise HTTPException(404, "Assembly not found")
+    return _to_response(a, db)
+
+
+@router.post("/{id_assemblage}/recalculate", response_model=AssemblageResponse)
+def recalculate_cost(id_assemblage: int, db: Session = Depends(get_db),
+                      _user=Depends(require_permission("assemblies"))):
+    """Force-recomputes the assembly's cost price from its current BOM."""
+    a = db.get(Assemblage, id_assemblage)
+    if not a:
+        raise HTTPException(404, "Assembly not found")
+    recalculer_assemblage(db, id_assemblage)
+    db.commit()
+    db.refresh(a)
     return _to_response(a, db)
 
 
@@ -220,6 +237,10 @@ def add_bom_item(id_assemblage: int, payload: BOMAddItem,
         id_piece_externe=payload.id_piece_externe,
     )
     db.add(n); db.commit(); db.refresh(n)
+
+    recalculer_assemblage(db, id_assemblage)
+    db.commit()
+
     return _bom_item(n, db)
 
 
@@ -231,3 +252,6 @@ def remove_bom_item(id_assemblage: int, id_nomenclature: int,
     if not n or n.id_parent != id_assemblage:
         raise HTTPException(404, "BOM item not found")
     db.delete(n); db.commit()
+
+    recalculer_assemblage(db, id_assemblage)
+    db.commit()

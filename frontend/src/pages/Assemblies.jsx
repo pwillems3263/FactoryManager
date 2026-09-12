@@ -99,17 +99,40 @@ export default function Assemblies() {
     finally { setSaving(false) }
   }
 
+  const refreshSelected = useCallback(async (id_assemblage) => {
+    if (!id_assemblage) return
+    try {
+      const { data } = await api.get(`/assemblies/${id_assemblage}`)
+      setSelected(data)
+    } catch { /* keep stale selection rather than clearing it */ }
+  }, [])
+
+  const [recalculating, setRecalculating] = useState(false)
+  const handleRecalculate = async () => {
+    if (!selected) return
+    setRecalculating(true)
+    try {
+      await api.post(`/assemblies/${selected.id_assemblage}/recalculate`)
+      refreshSelected(selected.id_assemblage)
+      fetchAssemblies()
+    } catch (err) { alert(err.response?.data?.detail || 'Error recalculating cost') }
+    finally { setRecalculating(false) }
+  }
+
   const handleAddBom = async () => {
     if (!bomSelected || !bomQty) return
     const payload = {
-      quantite: parseFloat(bomQty),
+      quantite: parseInt(bomQty),
       id_composant: bomType === 'component' ? parseInt(bomSelected) : null,
       id_service: bomType === 'service' ? parseInt(bomSelected) : null,
       id_piece_externe: bomType === 'external_part' ? parseInt(bomSelected) : null,
     }
     try {
       await api.post(`/assemblies/${selected.id_assemblage}/bom`, payload)
-      setShowBomForm(false); fetchBom(selected.id_assemblage); fetchAssemblies()
+      setShowBomForm(false)
+      fetchBom(selected.id_assemblage)
+      fetchAssemblies()
+      refreshSelected(selected.id_assemblage)
     } catch (err) { alert(err.response?.data?.detail || 'Error adding BOM item') }
   }
 
@@ -117,7 +140,9 @@ export default function Assemblies() {
     if (!window.confirm('Remove this item from BOM?')) return
     try {
       await api.delete(`/assemblies/${selected.id_assemblage}/bom/${id_nomenclature}`)
-      fetchBom(selected.id_assemblage); fetchAssemblies()
+      fetchBom(selected.id_assemblage)
+      fetchAssemblies()
+      refreshSelected(selected.id_assemblage)
     } catch (err) { alert(err.response?.data?.detail || 'Error removing BOM item') }
   }
 
@@ -193,8 +218,15 @@ export default function Assemblies() {
           <div className="detail-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <h3>📋 Bill of Materials</h3>
-              <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '12px' }}
-                onClick={() => { setBomType('component'); setShowBomForm(true) }}>+ Add Item</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }}
+                  disabled={recalculating}
+                  onClick={handleRecalculate}>
+                  {recalculating ? '⏳...' : '💰 Recalculate Cost'}
+                </button>
+                <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '12px' }}
+                  onClick={() => { setBomType('component'); setShowBomForm(true) }}>+ Add Item</button>
+              </div>
             </div>
             {bom.length === 0
               ? <p className="empty">No BOM items — add components, services or external parts</p>
@@ -288,7 +320,12 @@ export default function Assemblies() {
               </div>
               <div className="form-group">
                 <label>Quantity *</label>
-                <input type="number" step="0.001" min="0.001" value={bomQty} onChange={e => setBomQty(e.target.value)} />
+                <input type="number" step="1" min="1"
+                  value={bomQty}
+                  onChange={e => {
+                    const v = e.target.value
+                    setBomQty(v === '' ? '' : String(parseInt(v, 10)))
+                  }} />
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowBomForm(false)}>Cancel</button>

@@ -173,9 +173,11 @@ def recalculer_assemblage(
 
         elif n.service:
             s = n.service
-            # Services in BOM use a fixed cost × quantity (simple and predictable)
+            # Fixed cost takes priority; otherwise fall back to hourly rate × quantity
             if s.cout_fixe:
                 total += float(s.cout_fixe) * qte
+            elif s.cout_horaire:
+                total += float(s.cout_horaire) * qte
 
     assemblage.prix_revient = round(total, 4)
     print(f"Assemblage '{assemblage.nom}' → prix_revient = {total:.4f} €")

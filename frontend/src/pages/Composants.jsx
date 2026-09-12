@@ -26,6 +26,62 @@ export default function Composants() {
   const [formMode, setFormMode]   = useState('create')
   const [saving, setSaving]       = useState(false)
   const [formError, setFormError] = useState('')
+  const [matieres, setMatieres]   = useState([])
+
+  // ── Manufacturing Routing (Gamme) ──────────────────────────────────────
+  const [gamme, setGamme]           = useState(null)
+  const [loadingGamme, setLoadingGamme] = useState(false)
+  const [machinesList, setMachinesList] = useState([])
+  const [servicesList, setServicesList] = useState([])
+  const [extPartsList, setExtPartsList] = useState([])
+  const [showOpForm, setShowOpForm]     = useState(false)
+  const [opFormMode, setOpFormMode]     = useState('create')
+  const [opFormError, setOpFormError]   = useState('')
+  const [opSaving, setOpSaving]         = useState(false)
+  const EMPTY_OP = {
+    id_operation: null, step_type: 'machine',
+    description: '', tps_preparation: 0, tps_execution: 0, plan_url: '',
+    id_machine: '', id_service: '', id_piece_externe: '',
+  }
+  const [opFormData, setOpFormData] = useState(EMPTY_OP)
+
+  const fetchGamme = useCallback(async (id_composant) => {
+    if (!id_composant) { setGamme(null); return }
+    setLoadingGamme(true)
+    try {
+      const { data } = await api.get(`/composants/${id_composant}/gamme`)
+      setGamme(data)
+    } catch { setGamme(null) }
+    finally { setLoadingGamme(false) }
+  }, [])
+
+  const fetchResources = useCallback(async () => {
+    try {
+      const [m, s, e] = await Promise.all([
+        api.get('/machines', { params: { limit: 500 } }),
+        api.get('/services', { params: { limit: 500 } }),
+        api.get('/external-parts', { params: { limit: 500 } }),
+      ])
+      setMachinesList(m.data.items)
+      setServicesList(s.data.items)
+      setExtPartsList(e.data.items)
+    } catch { /* non-blocking */ }
+  }, [])
+
+  const refreshSelected = useCallback(async (id_composant) => {
+    if (!id_composant) return
+    try {
+      const { data } = await api.get(`/composants/${id_composant}`)
+      setSelected(data)
+    } catch { /* keep stale selection rather than clearing it */ }
+  }, [])
+
+  const fetchMatieres = useCallback(async () => {
+    try {
+      const { data } = await api.get('/matieres', { params: { limit: 500 } })
+      setMatieres(data.items)
+    } catch { /* non-blocking */ }
+  }, [])
 
   const fetchComposants = useCallback(async () => {
     setLoading(true)
@@ -45,6 +101,9 @@ export default function Composants() {
   }, [search, page])
 
   useEffect(() => { fetchComposants() }, [fetchComposants])
+  useEffect(() => { fetchMatieres() }, [fetchMatieres])
+  useEffect(() => { fetchResources() }, [fetchResources])
+  useEffect(() => { fetchGamme(selected?.id_composant) }, [selected, fetchGamme])
 
   const handleSearch = (e) => { setSearch(e.target.value); setPage(1) }
 
@@ -115,6 +174,83 @@ export default function Composants() {
     } finally {
       setSaving(false)
     }
+  }
+
+  // ── Manufacturing Routing (Gamme) handlers ──────────────────────────────
+
+  const openAddOperation = () => {
+    const nextOrdre = gamme?.operations?.length
+      ? Math.max(...gamme.operations.map(o => o.ordre)) + 1 : 1
+    setOpFormData({ ...EMPTY_OP, ordre: nextOrdre })
+    setOpFormMode('create')
+    setOpFormError('')
+    setShowOpForm(true)
+  }
+
+  const openEditOperation = (op) => {
+    setOpFormData({
+      id_operation: op.id_operation,
+      step_type: op.id_machine ? 'machine' : op.id_service ? 'service' : 'external',
+      description: op.description || '',
+      tps_preparation: op.tps_preparation,
+      tps_execution: op.tps_execution,
+      plan_url: op.plan_url || '',
+      id_machine: op.id_machine || '',
+      id_service: op.id_service || '',
+      id_piece_externe: op.id_piece_externe || '',
+    })
+    setOpFormMode('edit')
+    setOpFormError('')
+    setShowOpForm(true)
+  }
+
+  const handleOpSubmit = async (e) => {
+    e.preventDefault()
+    setOpSaving(true)
+    setOpFormError('')
+    const payload = {
+      description: opFormData.description || null,
+      tps_preparation: parseInt(opFormData.tps_preparation) || 0,
+      tps_execution: parseInt(opFormData.tps_execution) || 0,
+      plan_url: opFormData.plan_url || null,
+      id_machine: opFormData.step_type === 'machine' && opFormData.id_machine ? parseInt(opFormData.id_machine) : null,
+      id_service: opFormData.step_type === 'service' && opFormData.id_service ? parseInt(opFormData.id_service) : null,
+      id_piece_externe: opFormData.step_type === 'external' && opFormData.id_piece_externe ? parseInt(opFormData.id_piece_externe) : null,
+    }
+    try {
+      if (opFormMode === 'create') {
+        await api.post(`/composants/${selected.id_composant}/gamme/operations`, {
+          ...payload, ordre: opFormData.ordre,
+        })
+      } else {
+        await api.put(`/composants/${selected.id_composant}/gamme/operations/${opFormData.id_operation}`, payload)
+      }
+      setShowOpForm(false)
+      fetchGamme(selected.id_composant)
+      fetchComposants()
+      refreshSelected(selected.id_composant)
+    } catch (err) {
+      setOpFormError(err.response?.data?.detail || 'Error saving step')
+    } finally {
+      setOpSaving(false)
+    }
+  }
+
+  const handleDeleteOperation = async (id_operation) => {
+    if (!window.confirm('Delete this operation from the routing?')) return
+    try {
+      await api.delete(`/composants/${selected.id_composant}/gamme/operations/${id_operation}`)
+      fetchGamme(selected.id_composant)
+      fetchComposants()
+      refreshSelected(selected.id_composant)
+    } catch (err) { alert(err.response?.data?.detail || 'Error deleting step') }
+  }
+
+  const handleMoveOperation = async (id_operation, direction) => {
+    try {
+      await api.put(`/composants/${selected.id_composant}/gamme/operations/${id_operation}/move`, { direction })
+      fetchGamme(selected.id_composant)
+    } catch (err) { alert(err.response?.data?.detail || 'Error moving step') }
   }
 
   const handleChange = (e) => {
@@ -222,6 +358,51 @@ export default function Composants() {
         </div>
       )}
 
+      {selected && (
+        <div className="detail-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <h3>🛠 Manufacturing Routing{gamme?.version ? ` — v${gamme.version}` : ''}</h3>
+            <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '12px' }}
+              onClick={openAddOperation}>+ Add Operation</button>
+          </div>
+          {loadingGamme ? (
+            <p className="empty">Loading routing...</p>
+          ) : !gamme || gamme.operations.length === 0 ? (
+            <p className="empty">No routing yet — add at least one operation before this component can be scheduled</p>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Order</th><th>Description</th><th>Machine / Service / Ext.</th>
+                  <th>Setup (min)</th><th>Cycle (min/unit)</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {gamme.operations.map((op, idx) => (
+                  <tr key={op.id_operation}>
+                    <td className="td-center" style={{ fontWeight: 700 }}>{op.ordre}</td>
+                    <td className="td-nom">{op.description || '—'}</td>
+                    <td>{op.machine_nom || op.service_nom || op.piece_externe_nom || '—'}</td>
+                    <td className="td-center">{op.tps_preparation}</td>
+                    <td className="td-center">{op.tps_execution}</td>
+                    <td style={{ display: 'flex', gap: 4 }}>
+                      <button className="btn btn-secondary" style={{ padding: '3px 6px', fontSize: '11px' }}
+                        disabled={idx === 0} onClick={() => handleMoveOperation(op.id_operation, 'up')}>↑</button>
+                      <button className="btn btn-secondary" style={{ padding: '3px 6px', fontSize: '11px' }}
+                        disabled={idx === gamme.operations.length - 1} onClick={() => handleMoveOperation(op.id_operation, 'down')}>↓</button>
+                      <button className="btn btn-secondary" style={{ padding: '3px 6px', fontSize: '11px' }}
+                        onClick={() => openEditOperation(op)}>✏</button>
+                      <button className="btn btn-danger" style={{ padding: '3px 6px', fontSize: '11px' }}
+                        onClick={() => handleDeleteOperation(op.id_operation)}>✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -252,6 +433,16 @@ export default function Composants() {
                     {TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
+                <div className="form-group">
+                  <label>Raw Material</label>
+                  <select name="id_matiere_brut" value={formData.id_matiere_brut} onChange={handleChange}>
+                    <option value="">— None —</option>
+                    {matieres.map(m => <option key={m.id_matiere} value={m.id_matiere}>{m.nom}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row">
                 <div className="form-group">
                   <label>Raw Shape</label>
                   <select name="forme_brut" value={formData.forme_brut} onChange={handleChange}>
@@ -322,6 +513,102 @@ export default function Composants() {
                 <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={saving}>
                   {saving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Operation (routing step) Form Modal */}
+      {showOpForm && (
+        <div className="modal-overlay" onClick={() => setShowOpForm(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{opFormMode === 'create' ? '+ Add Operation' : '✏ Edit Operation'}</h3>
+              <button className="modal-close" onClick={() => setShowOpForm(false)}>✕</button>
+            </div>
+
+            <form onSubmit={handleOpSubmit} className="modal-form">
+              {opFormError && <div className="alert alert-error">{opFormError}</div>}
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Order</label>
+                  <input type="number" min="1" value={opFormData.ordre ?? ''}
+                    onChange={e => setOpFormData(p => ({ ...p, ordre: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Description</label>
+                  <input value={opFormData.description} placeholder="e.g. Rough turning"
+                    onChange={e => setOpFormData(p => ({ ...p, description: e.target.value }))} />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Setup time (min)</label>
+                  <input type="number" min="0" value={opFormData.tps_preparation}
+                    onChange={e => setOpFormData(p => ({ ...p, tps_preparation: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Cycle time (min/unit)</label>
+                  <input type="number" min="0" value={opFormData.tps_execution}
+                    onChange={e => setOpFormData(p => ({ ...p, tps_execution: e.target.value }))} />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Drawing URL</label>
+                <input value={opFormData.plan_url} placeholder="https://..."
+                  onChange={e => setOpFormData(p => ({ ...p, plan_url: e.target.value }))} />
+              </div>
+
+              <div className="form-group">
+                <label>Step Type</label>
+                <select value={opFormData.step_type}
+                  onChange={e => setOpFormData(p => ({ ...p, step_type: e.target.value }))}>
+                  <option value="machine">Machine Operation</option>
+                  <option value="service">Service</option>
+                  <option value="external">External Part</option>
+                </select>
+              </div>
+
+              {opFormData.step_type === 'machine' && (
+                <div className="form-group">
+                  <label>Machine</label>
+                  <select value={opFormData.id_machine}
+                    onChange={e => setOpFormData(p => ({ ...p, id_machine: e.target.value }))}>
+                    <option value="">— Select —</option>
+                    {machinesList.map(m => <option key={m.id_machine} value={m.id_machine}>{m.nom}</option>)}
+                  </select>
+                </div>
+              )}
+              {opFormData.step_type === 'service' && (
+                <div className="form-group">
+                  <label>Service</label>
+                  <select value={opFormData.id_service}
+                    onChange={e => setOpFormData(p => ({ ...p, id_service: e.target.value }))}>
+                    <option value="">— Select —</option>
+                    {servicesList.map(s => <option key={s.id_service} value={s.id_service}>{s.nom}</option>)}
+                  </select>
+                </div>
+              )}
+              {opFormData.step_type === 'external' && (
+                <div className="form-group">
+                  <label>External Part</label>
+                  <select value={opFormData.id_piece_externe}
+                    onChange={e => setOpFormData(p => ({ ...p, id_piece_externe: e.target.value }))}>
+                    <option value="">— Select —</option>
+                    {extPartsList.map(x => <option key={x.id_piece_externe} value={x.id_piece_externe}>{x.nom}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowOpForm(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={opSaving}>
+                  {opSaving ? 'Saving...' : 'Save'}
                 </button>
               </div>
             </form>

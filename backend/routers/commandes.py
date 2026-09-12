@@ -13,6 +13,9 @@ from sqlalchemy.orm import Session
 from auth import require_permission
 from database import get_db
 from models import Commande, LigneCommande, Assemblage
+from services.of_service import generer_of_depuis_ligne
+from services.planning_service import planifier_of_assemblage
+from services.cout_service import recalculer_assemblage
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -109,6 +112,12 @@ class LigneCreate(BaseModel):
 class LigneUpdate(BaseModel):
     quantite: Optional[float] = None
     statut:   Optional[str]   = None
+
+
+class ReleaseResponse(BaseModel):
+    ligne:   LigneResponse
+    nb_ofs:  int
+    message: str
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -238,6 +247,50 @@ def add_line(id_commande: int, payload: LigneCreate,
     )
     db.add(l); db.commit(); db.refresh(l)
     return _ligne_to_response(l, db)
+
+
+@router.post("/{id_commande}/lines/{id_ligne}/release", response_model=ReleaseResponse)
+def release_line(id_commande: int, id_ligne: int,
+                  db: Session = Depends(get_db),
+                  _user=Depends(require_permission("orders"))):
+    """
+    Release a line: generates the OFAssemblage + component OFs from the BOM,
+    schedules them at the earliest possible date, snapshots the cost price,
+    and marks the line as 'released'.
+    Mirrors the desktop app's "Release Line" action.
+    """
+    ligne = db.get(LigneCommande, id_ligne)
+    if not ligne or ligne.id_commande != id_commande:
+        raise HTTPException(404, "Line not found")
+    if ligne.statut != "on_hold":
+        raise HTTPException(409, f"Line already '{ligne.statut}', cannot release again")
+
+    try:
+        # 1. Generate the assembly OF + component OFs from the BOM
+        of_assemblage = generer_of_depuis_ligne(db, id_ligne)
+
+        # 2. Schedule all component OFs at the earliest date
+        planifier_of_assemblage(session=db, id_of_assemblage=of_assemblage.id_of_assemblage)
+
+        # 3. Snapshot the cost price
+        ligne = db.get(LigneCommande, id_ligne)
+        if ligne and ligne.assemblage:
+            prix = recalculer_assemblage(db, ligne.id_assemblage)
+            ligne.prix_revient_snapshot = prix
+
+        ligne.statut = "released"
+        db.commit()
+        db.refresh(ligne)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(400, f"Failed to release line: {e}")
+
+    nb_ofs = len(of_assemblage.ordres_fabrication) if of_assemblage else 0
+    return ReleaseResponse(
+        ligne=_ligne_to_response(ligne, db),
+        nb_ofs=nb_ofs,
+        message="Production Orders generated and scheduled.",
+    )
 
 
 @router.put("/{id_commande}/lines/{id_ligne}", response_model=LigneResponse)
