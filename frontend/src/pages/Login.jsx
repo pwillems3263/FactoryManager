@@ -16,7 +16,7 @@ export default function Login() {
     setLoading(true)
 
     try {
-      // FastAPI OAuth2 attend un form-data, pas du JSON
+      // FastAPI OAuth2 expects form-data, not JSON
       const form = new URLSearchParams()
       form.append('username', username)
       form.append('password', password)
@@ -34,7 +34,7 @@ export default function Login() {
 
       navigate('/dashboard')
     } catch (err) {
-      setError('Identifiant ou mot de passe incorrect')
+      setError('Invalid username or password')
     } finally {
       setLoading(false)
     }
@@ -46,37 +46,37 @@ export default function Login() {
         <div className="login-logo">
           <span className="login-logo-icon">🏭</span>
           <h1>FactoryManager</h1>
-          <p>Gestion de production</p>
+          <p>Production Management</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
           {error && <div className="login-error">{error}</div>}
 
           <div className="form-group">
-            <label>Identifiant</label>
+            <label>Username</label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Votre identifiant"
+              placeholder="Your username"
               required
               autoFocus
             />
           </div>
 
           <div className="form-group">
-            <label>Mot de passe</label>
+            <label>Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Votre mot de passe"
+              placeholder="Your password"
               required
             />
           </div>
 
           <button type="submit" className="login-btn" disabled={loading}>
-            {loading ? 'Connexion...' : 'Se connecter'}
+            {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
       </div>

@@ -13,7 +13,7 @@ const MENU = [
   { path: '/of',           icon: '🏭', label: 'Work Orders',      ready: true },
   { path: '/suivi',        icon: '📈', label: 'Production Track', ready: true },
   { path: '/pointage',     icon: '⏱️', label: 'Time Tracking',    ready: true },
-  { path: '/planning',     icon: '📅', label: 'Planning',         ready: false },
+  { path: '/planning',     icon: '📅', label: 'Planning',         ready: true },
   { path: '/utilisateurs', icon: '👥', label: 'Users',            ready: true },
 ]
 
@@ -45,6 +45,7 @@ export default function Sidebar() {
     </aside>
   )
 }
+
 
 
 

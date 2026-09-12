@@ -1,48 +1,64 @@
-"""
-backend/database.py
--------------------
-Initialisation SQLAlchemy pour FastAPI — multi-utilisateurs simultanés.
-Connection pool dimensionné pour le web.
-Les credentials viennent uniquement des variables d'environnement (.env serveur).
-"""
-
-import os
+﻿import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 
-load_dotenv()  # charge backend/.env (jamais commité dans Git)
+load_dotenv()
 
-
-def get_db_url() -> str:
-    return (
-        f"postgresql+psycopg2://"
-        f"{os.getenv('DB_USER', 'postgres')}:{os.getenv('DB_PASSWORD', '')}"
-        f"@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}"
-        f"/{os.getenv('DB_NAME', 'FactoryManager')}"
-    )
-
-
-engine = create_engine(
-    get_db_url(),
-    pool_size=20,        # connexions maintenues en permanence
-    max_overflow=10,     # connexions supplémentaires en pic de charge
-    pool_timeout=30,     # secondes d'attente max avant erreur
-    pool_pre_ping=True,  # vérifie la connexion avant chaque utilisation
-)
-
-SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 
+DB_CONFIGS = {
+    "prod": {
+        "host":     os.getenv("DB_PROD_HOST", os.getenv("DB_HOST", "localhost")),
+        "port":     os.getenv("DB_PROD_PORT", os.getenv("DB_PORT", "5432")),
+        "name":     os.getenv("DB_PROD_NAME", "FactoryManager_prod"),
+        "user":     os.getenv("DB_PROD_USER", os.getenv("DB_USER", "postgres")),
+        "password": os.getenv("DB_PROD_PASSWORD", os.getenv("DB_PASSWORD", "")),
+        "label":    "PRODUCTION",
+        "color":    "red",
+    },
+    "test": {
+        "host":     os.getenv("DB_TEST_HOST", os.getenv("DB_HOST", "localhost")),
+        "port":     os.getenv("DB_TEST_PORT", os.getenv("DB_PORT", "5432")),
+        "name":     os.getenv("DB_TEST_NAME", "FactoryManager_dev"),
+        "user":     os.getenv("DB_TEST_USER", os.getenv("DB_USER", "postgres")),
+        "password": os.getenv("DB_TEST_PASSWORD", os.getenv("DB_PASSWORD", "")),
+        "label":    "TEST",
+        "color":    "orange",
+    },
+}
 
-# ─── Dépendance FastAPI : 1 session par requête HTTP ─────────────────────────
+def _make_url(cfg):
+    return f"postgresql+psycopg2://{cfg['user']}:{cfg['password']}@{cfg['host']}:{cfg['port']}/{cfg['name']}"
+
+_engines = {}
+_session_factories = {}
+
+for db_key, cfg in DB_CONFIGS.items():
+    engine = create_engine(_make_url(cfg), pool_size=10, max_overflow=5, pool_timeout=30, pool_pre_ping=True)
+    _engines[db_key] = engine
+    _session_factories[db_key] = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+
+def get_session_factory(db_key: str):
+    return _session_factories.get(db_key, _session_factories["test"])
+
+def get_db_info(db_key: str) -> dict:
+    return DB_CONFIGS.get(db_key, DB_CONFIGS["test"])
+
+def get_db_for_key(db_key: str):
+    factory = get_session_factory(db_key)
+    db = factory()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Backward compatibility — used by routers via Depends(get_db)
+# Real per-request DB selection happens via auth.py
+SessionLocal = _session_factories["test"]
+
 def get_db():
-    """
-    Injectée via Depends(get_db) dans chaque endpoint.
-    Garantit qu'une session est ouverte ET fermée pour chaque requête,
-    même en cas d'erreur — indispensable en multi-utilisateurs.
-    """
-    db = SessionLocal()
+    db = _session_factories["test"]()
     try:
         yield db
     finally:

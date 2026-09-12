@@ -12,9 +12,21 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 # Objet de configuration Alembic
 config = context.config
 
-# Surcharge de l'URL avec la valeur lue depuis .env
-from db_config import get_db_url
-config.set_main_option("sqlalchemy.url", get_db_url())
+# ── Sélection de la base cible ───────────────────────────────────────────────
+# Par défaut : test (sécurité). Pour cibler prod explicitement :
+#     alembic -x db=prod upgrade head
+x_args = context.get_x_argument(as_dictionary=True)
+db_key = x_args.get("db", "test")
+
+from database import DB_CONFIGS, _make_url
+
+if db_key not in DB_CONFIGS:
+    raise ValueError(f"Unknown db key '{db_key}' — expected one of {list(DB_CONFIGS.keys())}")
+
+db_url = _make_url(DB_CONFIGS[db_key])
+config.set_main_option("sqlalchemy.url", db_url)
+
+print(f"[alembic] Target database: '{db_key}' -> {DB_CONFIGS[db_key]['host']}:{DB_CONFIGS[db_key]['port']}/{DB_CONFIGS[db_key]['name']}")
 
 # Logging depuis alembic.ini
 if config.config_file_name is not None:
