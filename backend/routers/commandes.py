@@ -10,8 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from auth import require_permission
-from database import get_db
+from auth import require_permission, get_db
 from models import Commande, LigneCommande, Assemblage
 from services.of_service import generer_of_depuis_ligne
 from services.planning_service import planifier_of_assemblage

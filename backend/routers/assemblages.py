@@ -9,8 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from auth import require_permission
-from database import get_db
+from auth import require_permission, get_db
 from models import Assemblage, Nomenclature, Composant, Service, PieceExterne
 from services.cout_service import recalculer_assemblage
 

@@ -16,8 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from auth import get_current_user, require_permission
-from database import get_db
+from auth import get_current_user, require_permission, get_db
 from models import Machine, OperationPlanifiee, OrdreFabrication
 from models.production import PausePointage
 

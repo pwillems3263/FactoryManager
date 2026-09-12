@@ -53,13 +53,6 @@ def get_db_for_key(db_key: str):
     finally:
         db.close()
 
-# Backward compatibility — used by routers via Depends(get_db)
-# Real per-request DB selection happens via auth.py
+# Backward compatibility — kept only for scripts/tools that need a quick
+# session on the test DB directly (not used by API routers).
 SessionLocal = _session_factories["test"]
-
-def get_db():
-    db = _session_factories["test"]()
-    try:
-        yield db
-    finally:
-        db.close()

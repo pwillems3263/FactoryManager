@@ -10,8 +10,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from auth import require_permission
-from database import get_db
+from auth import require_permission, get_db
 from models import OrdreFabrication, OFAssemblage, OperationPlanifiee
 
 router = APIRouter(prefix="/production-track", tags=["Production Track"])

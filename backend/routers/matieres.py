@@ -14,8 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from auth import require_permission
-from database import get_db
+from auth import require_permission, get_db
 from models import MatierePremiere, Composant
 
 router = APIRouter(prefix="/matieres", tags=["Raw Materials"])
