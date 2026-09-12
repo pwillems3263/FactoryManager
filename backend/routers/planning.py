@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from auth import require_permission, get_db
 from models import Machine, OperationPlanifiee, OrdreFabrication
+from services.planning_service import valider_deplacement, deplacer_operation, recalculer_planning_global
 
 router = APIRouter(prefix="/planning", tags=["Planning"])
 
@@ -77,17 +78,22 @@ class MoveOpRequest(BaseModel):
 def _op_response(op: OperationPlanifiee) -> PlanningOpResponse:
     of = op.of
     ofa = of.of_assemblage if of else None
+    ordre = op.operation.ordre if op.operation else 0
+    duree_h = None
+    if op.date_debut and op.date_fin:
+        duree_h = round((op.date_fin - op.date_debut).total_seconds() / 3600, 2)
     return PlanningOpResponse(
-        id_op=op.id_op,
+        id_op=op.id_op_plan,
         id_of=op.id_of,
         code_of=of.code_of if of else None,
-        ordre=op.ordre,
-        nom_operation=op.nom_operation or f"Op {op.ordre}",
+        ordre=ordre,
+        nom_operation=(op.operation.description if op.operation and op.operation.description
+                       else f"Op {ordre}"),
         composant_nom=of.composant.nom if of and of.composant else "—",
         assembly_nom=ofa.assemblage.nom if ofa and ofa.assemblage else "—",
         id_machine=op.id_machine,
         machine_nom=op.machine.nom if op.machine else None,
-        duree_prevue_h=float(op.duree_prevue_h) if op.duree_prevue_h else None,
+        duree_prevue_h=duree_h,
         date_debut=str(op.date_debut)[:16] if op.date_debut else None,
         date_fin=str(op.date_fin)[:16] if op.date_fin else None,
         statut=op.statut,
@@ -173,30 +179,74 @@ def get_planning(
     )
 
 
-@router.put("/ops/{id_op}/move", response_model=PlanningOpResponse)
+@router.put("/ops/{id_op}/move", response_model=list[PlanningOpResponse])
 def move_operation(
     id_op:   int,
     payload: MoveOpRequest,
     db:      Session = Depends(get_db),
     _user            = Depends(require_permission("planning")),
 ):
-    """Move an operation to a new start date (and optionally a new machine)."""
+    """
+    Move an operation to a new start date (and optionally a new machine).
+    Cascades the shift to subsequent operations of the same routing, exactly
+    like the desktop app. Returns every operation that was touched, so the
+    Gantt can update all affected bars in one go.
+    """
     op = db.get(OperationPlanifiee, id_op)
     if not op:
         raise HTTPException(404, "Operation not found")
-    if op.statut not in ("planifiee", "a_planifier"):
-        raise HTTPException(400, f"Cannot move operation with status '{op.statut}'")
 
-    # Recalculate end date based on duration
-    op.date_debut = payload.new_date_debut
-    if op.duree_prevue_h:
-        op.date_fin = payload.new_date_debut + timedelta(hours=float(op.duree_prevue_h))
+    # The frontend sends an ISO string with a 'Z' suffix, which parses as
+    # timezone-aware — but every date stored in the DB (date_fin, etc.) is
+    # naive. Strip the tzinfo so comparisons in the service layer don't blow up.
+    nouvelle_date_debut = payload.new_date_debut
+    if nouvelle_date_debut.tzinfo is not None:
+        nouvelle_date_debut = nouvelle_date_debut.replace(tzinfo=None)
 
-    if payload.id_machine is not None:
-        op.id_machine = payload.id_machine
+    try:
+        ok, message = valider_deplacement(
+            session=db,
+            id_op_plan=id_op,
+            nouvelle_date_debut=nouvelle_date_debut,
+            id_nouvelle_machine=payload.id_machine,
+        )
+    except Exception as e:
+        raise HTTPException(400, f"Validation error: {e}")
+    if not ok:
+        raise HTTPException(400, message)
 
-    db.commit(); db.refresh(op)
-    return _op_response(op)
+    try:
+        modifiees = deplacer_operation(
+            session=db,
+            id_op_plan=id_op,
+            nouvelle_date_debut=nouvelle_date_debut,
+            id_nouvelle_machine=payload.id_machine,
+        )
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(400, f"Failed to move operation: {e}")
+
+    return [_op_response(db.get(OperationPlanifiee, m.id_op_plan)) for m in modifiees]
+
+
+@router.post("/recalculate-global", response_model=dict)
+def recalculate_global(
+    db:   Session = Depends(get_db),
+    _user         = Depends(require_permission("planning")),
+):
+    """
+    Re-schedules every planned operation at the earliest possible time,
+    respecting machine availability, routing order, and priority — the same
+    global optimizer as the desktop app's planning screen.
+    """
+    try:
+        result = recalculer_planning_global(db)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(400, f"Failed to recalculate schedule: {e}")
+    return result
 
 
 @router.get("/summary", response_model=dict)

@@ -100,19 +100,24 @@ def _pause_response(p: PausePointage) -> PauseResponse:
 def _op_response(op: OperationPlanifiee, db: Session) -> OpTrackResponse:
     of = op.of
     ofa = of.of_assemblage if of else None
-    pauses = _get_pauses(db, op.id_op)
+    pauses = _get_pauses(db, op.id_op_plan)
     en_pause = any(p.fin_pause is None for p in pauses)
+    ordre = op.operation.ordre if op.operation else 0
+    duree_h = None
+    if op.date_debut and op.date_fin:
+        duree_h = round((op.date_fin - op.date_debut).total_seconds() / 3600, 2)
 
     return OpTrackResponse(
-        id_op=op.id_op,
+        id_op=op.id_op_plan,
         id_of=op.id_of,
         code_of=of.code_of if of else None,
-        ordre=op.ordre,
-        nom_operation=op.nom_operation or f"Op {op.ordre}",
+        ordre=ordre,
+        nom_operation=(op.operation.description if op.operation and op.operation.description
+                       else f"Op {ordre}"),
         composant_nom=of.composant.nom if of and of.composant else "—",
         assembly_nom=ofa.assemblage.nom if ofa and ofa.assemblage else "—",
         machine_nom=op.machine.nom if op.machine else None,
-        duree_prevue_h=float(op.duree_prevue_h) if op.duree_prevue_h else None,
+        duree_prevue_h=duree_h,
         statut=op.statut,
         statut_label=STATUT_LABELS.get(op.statut, op.statut),
         statut_color=STATUT_COLORS.get(op.statut, "#95a5a6"),

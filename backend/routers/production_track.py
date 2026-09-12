@@ -79,12 +79,17 @@ class ProductionTrackResponse(BaseModel):
 
 
 def _op_response(op: OperationPlanifiee) -> OperationTrackResponse:
+    ordre = op.operation.ordre if op.operation else 0
+    duree_h = None
+    if op.date_debut and op.date_fin:
+        duree_h = round((op.date_fin - op.date_debut).total_seconds() / 3600, 2)
     return OperationTrackResponse(
-        id_op=op.id_op,
-        ordre=op.ordre,
-        nom_operation=op.nom_operation or f"Op {op.ordre}",
+        id_op=op.id_op_plan,
+        ordre=ordre,
+        nom_operation=(op.operation.description if op.operation and op.operation.description
+                       else f"Op {ordre}"),
         machine_nom=op.machine.nom if op.machine else None,
-        duree_prevue_h=float(op.duree_prevue_h) if op.duree_prevue_h else None,
+        duree_prevue_h=duree_h,
         date_debut=str(op.date_debut)[:16] if op.date_debut else None,
         date_fin=str(op.date_fin)[:16] if op.date_fin else None,
         statut=op.statut,
@@ -98,7 +103,7 @@ def _of_response(of: OrdreFabrication, with_ops: bool = False) -> OFTrackRespons
     ligne = ofa.ligne_commande if ofa else None
     commande = ligne.commande if ligne else None
 
-    ops = sorted(of.operations_planifiees, key=lambda o: o.ordre)
+    ops = sorted(of.operations_planifiees, key=lambda o: o.operation.ordre if o.operation else 0)
     nb_total = len(ops)
     nb_done  = sum(1 for o in ops if o.statut in ("terminee", "termine"))
     progress = int(nb_done / nb_total * 100) if nb_total else 0
