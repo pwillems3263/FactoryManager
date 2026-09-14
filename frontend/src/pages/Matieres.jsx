@@ -202,7 +202,17 @@ export default function Matieres() {
             <div><label>Price (€/kg)</label>
               <span>{selected.prix_au_kg != null ? `${parseFloat(selected.prix_au_kg).toFixed(4)} €` : '—'}</span>
             </div>
-            <div><label>Used in Components</label><span>{selected.nb_composants}</span></div>
+            <div>
+              <label className="info-tooltip">
+                Used in Components
+                <span className="info-icon">i</span>
+                <span className="tooltip-bubble">
+                  Number of components whose bill of materials references this raw material.
+                  A material used by at least one component cannot be deleted.
+                </span>
+              </label>
+              <span>{selected.nb_composants}</span>
+            </div>
           </div>
 
           {priceHistory.length > 0 && (

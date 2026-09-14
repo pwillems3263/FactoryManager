@@ -199,7 +199,17 @@ export default function PiecesExternes() {
             <div><label>Unit Price</label>
               <span>{selected.prix_unitaire != null ? `${parseFloat(selected.prix_unitaire).toFixed(2)} €` : '—'}</span>
             </div>
-            <div><label>Used in Components</label><span>{selected.nb_composants}</span></div>
+            <div>
+              <label className="info-tooltip">
+                Used in Components
+                <span className="info-icon">i</span>
+                <span className="tooltip-bubble">
+                  Number of components whose bill of materials references this external part.
+                  A part used by at least one component cannot be deleted.
+                </span>
+              </label>
+              <span>{selected.nb_composants}</span>
+            </div>
             {selected.description && (
               <div className="detail-full"><label>Description</label><span>{selected.description}</span></div>
             )}

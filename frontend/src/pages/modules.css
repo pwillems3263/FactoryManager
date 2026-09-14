@@ -119,6 +119,51 @@
 .detail-grid label { font-size: 11px; color: #7f8c8d; text-transform: uppercase; font-weight: 600; }
 .detail-grid span  { font-size: 14px; color: #2c3e50; }
 
+.info-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: help;
+}
+.info-tooltip .info-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #cfd8dc;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: none;
+  font-family: sans-serif;
+}
+.info-tooltip .tooltip-bubble {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 220px;
+  background: #2c3e50;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: none;
+  line-height: 1.4;
+  padding: 8px 10px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  z-index: 20;
+  transition: opacity 0.15s;
+}
+.info-tooltip:hover .tooltip-bubble {
+  visibility: visible;
+  opacity: 1;
+}
+
 .price-history { margin-top: 18px; border-top: 1px solid #eee; padding-top: 14px; }
 .price-history h4 { font-size: 13px; font-weight: 700; color: #2c3e50; margin-bottom: 8px; }
 .price-history .data-table { font-size: 13px; }
