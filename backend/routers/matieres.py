@@ -10,6 +10,7 @@ CRUD Raw Materials (MatierePremiere) :
 """
 
 from typing import Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -130,6 +131,18 @@ def get_historique_prix(
     m = db.get(MatierePremiere, id_matiere)
     if not m:
         raise HTTPException(404, "Raw material not found")
+
+    if not m.historique_prix:
+        # Aucune modification de prix enregistrée pour cette matière
+        # (créée avant l'ajout de cette fonctionnalité) : on renvoie une
+        # ligne "virtuelle" avec le prix actuel, sans rien stocker en base.
+        prix = float(m.prix_au_kg) if m.prix_au_kg is not None else None
+        return [HistoriquePrixResponse(
+            ancien_prix=prix,
+            nouveau_prix=prix,
+            date_modification=datetime.utcnow().isoformat(),
+        )]
+
     return [
         HistoriquePrixResponse(
             ancien_prix=float(h.ancien_prix) if h.ancien_prix is not None else None,
@@ -148,6 +161,14 @@ def create_matiere(
 ):
     m = MatierePremiere(**payload.model_dump())
     db.add(m)
+    db.flush()  # obtenir m.id_matiere avant de créer l'historique
+
+    db.add(HistoriquePrixMatiere(
+        id_matiere=m.id_matiere,
+        ancien_prix=None,
+        nouveau_prix=m.prix_au_kg,
+    ))
+
     db.commit()
     db.refresh(m)
     return _to_response(m, db)
