@@ -6,3 +6,6 @@ __pycache__/
 *.zip
 ~$*
 supabase/
+.idea/
+dist/
+build/
