@@ -1,46 +1,75 @@
 import { NavLink } from 'react-router-dom'
 import './Sidebar.css'
 
-const MENU = [
-  { path: '/dashboard',    icon: '📊', label: 'Dashboard',        ready: true  },
-  { path: '/composants',   icon: '📦', label: 'Components',       ready: true  },
-  { path: '/matieres',     icon: '🧱', label: 'Raw Materials',    ready: true },
-  { path: '/pieces-ext',   icon: '🔩', label: 'External Parts',   ready: true },
-  { path: '/services',     icon: '⚙️', label: 'Services',         ready: true },
-  { path: '/machines',     icon: '🏗️', label: 'Machines',         ready: true },
-  { path: '/assemblages',  icon: '🔗', label: 'Assemblies',       ready: true },
-  { path: '/commandes',    icon: '📋', label: 'Orders',           ready: true },
-  { path: '/of',           icon: '🏭', label: 'Work Orders',      ready: true },
-  { path: '/suivi',        icon: '📈', label: 'Production Track', ready: true },
-  { path: '/pointage',     icon: '⏱️', label: 'Time Tracking',    ready: true },
-  { path: '/planning',     icon: '📅', label: 'Planning',         ready: true },
-  { path: '/utilisateurs', icon: '👥', label: 'Users',            ready: true },
+// Top-level item, shown above all groups (home page)
+const TOP_ITEM = { path: '/dashboard', icon: '📊', label: 'Dashboard', ready: true }
+
+// Grouped navigation
+const GROUPS = [
+  {
+    label: 'Planning & Reporting',
+    items: [
+      { path: '/planning',  icon: '📅', label: 'Planning',            ready: true  },
+      { path: '/suivi',     icon: '📈', label: 'Production Tracking', ready: true  },
+      { path: '/pointage',  icon: '⏱️', label: 'Time Tracking',       ready: true  },
+      { path: '/rebuts',    icon: '🗑️', label: 'Scrap',               ready: false },
+    ],
+  },
+  {
+    label: 'Orders',
+    items: [
+      { path: '/commandes', icon: '📋', label: 'Orders',          ready: true },
+      { path: '/of',        icon: '🏭', label: 'Assembly Orders', ready: true },
+    ],
+  },
+  {
+    label: 'Configuration',
+    items: [
+      { path: '/assemblages',  icon: '🔗', label: 'Assemblies',     ready: true },
+      { path: '/composants',   icon: '📦', label: 'Components',    ready: true },
+      { path: '/services',     icon: '⚙️', label: 'Services',       ready: true },
+      { path: '/pieces-ext',   icon: '🔩', label: 'External Parts', ready: true },
+      { path: '/matieres',     icon: '🧱', label: 'Material',       ready: true },
+      { path: '/machines',     icon: '🏗️', label: 'Machines',       ready: true },
+      { path: '/utilisateurs', icon: '👥', label: 'Users',          ready: true },
+    ],
+  },
 ]
+
+function SidebarLink({ item }) {
+  return item.ready ? (
+    <NavLink
+      to={item.path}
+      className={({ isActive }) =>
+        'sidebar-item' + (isActive ? ' active' : '')
+      }
+    >
+      <span className="sidebar-icon">{item.icon}</span>
+      <span className="sidebar-label">{item.label}</span>
+    </NavLink>
+  ) : (
+    <div className="sidebar-item disabled">
+      <span className="sidebar-icon">{item.icon}</span>
+      <span className="sidebar-label">{item.label}</span>
+      <span className="sidebar-soon">soon</span>
+    </div>
+  )
+}
 
 export default function Sidebar() {
   return (
     <aside className="sidebar">
       <nav className="sidebar-nav">
-        {MENU.map((item) =>
-          item.ready ? (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                'sidebar-item' + (isActive ? ' active' : '')
-              }
-            >
-              <span className="sidebar-icon">{item.icon}</span>
-              <span className="sidebar-label">{item.label}</span>
-            </NavLink>
-          ) : (
-            <div key={item.path} className="sidebar-item disabled">
-              <span className="sidebar-icon">{item.icon}</span>
-              <span className="sidebar-label">{item.label}</span>
-              <span className="sidebar-soon">soon</span>
-            </div>
-          )
-        )}
+        <SidebarLink item={TOP_ITEM} />
+
+        {GROUPS.map((group) => (
+          <div className="sidebar-group" key={group.label}>
+            <div className="sidebar-group-label">{group.label}</div>
+            {group.items.map((item) => (
+              <SidebarLink key={item.path} item={item} />
+            ))}
+          </div>
+        ))}
       </nav>
     </aside>
   )
