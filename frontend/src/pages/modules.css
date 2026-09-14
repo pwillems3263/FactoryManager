@@ -118,6 +118,10 @@
 .detail-grid > div { display: flex; flex-direction: column; gap: 3px; }
 .detail-grid label { font-size: 11px; color: #7f8c8d; text-transform: uppercase; font-weight: 600; }
 .detail-grid span  { font-size: 14px; color: #2c3e50; }
+
+.price-history { margin-top: 18px; border-top: 1px solid #eee; padding-top: 14px; }
+.price-history h4 { font-size: 13px; font-weight: 700; color: #2c3e50; margin-bottom: 8px; }
+.price-history .data-table { font-size: 13px; }
 .detail-full { grid-column: 1 / -1; }
 
 /* Modal */

@@ -17,6 +17,7 @@ export default function Matieres() {
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState('')
   const [selected, setSelected]   = useState(null)
+  const [priceHistory, setPriceHistory] = useState([])
   const [showForm, setShowForm]   = useState(false)
   const [formData, setFormData]   = useState(EMPTY_FORM)
   const [formMode, setFormMode]   = useState('create')
@@ -41,6 +42,13 @@ export default function Matieres() {
   }, [search, page])
 
   useEffect(() => { fetchMatieres() }, [fetchMatieres])
+
+  useEffect(() => {
+    if (!selected) { setPriceHistory([]); return }
+    api.get(`/matieres/${selected.id_matiere}/historique-prix`)
+      .then(({ data }) => setPriceHistory(data))
+      .catch(() => setPriceHistory([]))
+  }, [selected])
 
   const handleSearch = (e) => { setSearch(e.target.value); setPage(1) }
 
@@ -196,6 +204,26 @@ export default function Matieres() {
             </div>
             <div><label>Used in Components</label><span>{selected.nb_composants}</span></div>
           </div>
+
+          {priceHistory.length > 0 && (
+            <div className="price-history">
+              <h4>Price History</h4>
+              <table className="data-table">
+                <thead>
+                  <tr><th>Date</th><th>Old Price</th><th>New Price</th></tr>
+                </thead>
+                <tbody>
+                  {priceHistory.map((h, i) => (
+                    <tr key={i}>
+                      <td>{new Date(h.date_modification).toLocaleString()}</td>
+                      <td>{h.ancien_prix != null ? `${h.ancien_prix.toFixed(4)} €` : '—'}</td>
+                      <td>{h.nouveau_prix != null ? `${h.nouveau_prix.toFixed(4)} €` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

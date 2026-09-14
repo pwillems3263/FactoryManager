@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, ForeignKey, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, Numeric, ForeignKey, DateTime, Boolean, func
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -56,6 +56,22 @@ class MatierePremiere(Base):
     operations_matieres = relationship("OperationMatiere", back_populates="matiere")
     composants = relationship("Composant", back_populates="matiere_brut",
                               foreign_keys="Composant.id_matiere_brut")
+    historique_prix = relationship("HistoriquePrixMatiere", back_populates="matiere",
+                                   cascade="all, delete-orphan",
+                                   order_by="HistoriquePrixMatiere.date_modification.desc()")
+
+
+class HistoriquePrixMatiere(Base):
+    """Historique des modifications de prix_au_kg d'une matière première."""
+    __tablename__ = "historiqueprixmatiere"
+
+    id_historique     = Column(Integer, primary_key=True, autoincrement=True)
+    id_matiere        = Column(Integer, ForeignKey("matierepremiere.id_matiere"), nullable=False)
+    ancien_prix       = Column(Numeric(10, 4), nullable=True)
+    nouveau_prix      = Column(Numeric(10, 4), nullable=True)
+    date_modification = Column(DateTime, nullable=False, server_default=func.now())
+
+    matiere = relationship("MatierePremiere", back_populates="historique_prix")
 
 class ArretMachine(Base):
     __tablename__ = "arretmachine"

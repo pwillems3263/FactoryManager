@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from auth import require_permission, get_db
-from models import MatierePremiere, Composant
+from models import MatierePremiere, Composant, HistoriquePrixMatiere
 
 router = APIRouter(prefix="/matieres", tags=["Raw Materials"])
 
@@ -112,6 +112,34 @@ def get_matiere(
     return _to_response(m, db)
 
 
+class HistoriquePrixResponse(BaseModel):
+    ancien_prix: Optional[float]
+    nouveau_prix: Optional[float]
+    date_modification: str
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/{id_matiere}/historique-prix", response_model=list[HistoriquePrixResponse])
+def get_historique_prix(
+    id_matiere: int,
+    db:         Session = Depends(get_db),
+    _user               = Depends(require_permission("materials")),
+):
+    m = db.get(MatierePremiere, id_matiere)
+    if not m:
+        raise HTTPException(404, "Raw material not found")
+    return [
+        HistoriquePrixResponse(
+            ancien_prix=float(h.ancien_prix) if h.ancien_prix is not None else None,
+            nouveau_prix=float(h.nouveau_prix) if h.nouveau_prix is not None else None,
+            date_modification=h.date_modification.isoformat(),
+        )
+        for h in m.historique_prix
+    ]
+
+
 @router.post("", response_model=MatiereResponse, status_code=201)
 def create_matiere(
     payload: MatiereCreate,
@@ -135,7 +163,17 @@ def update_matiere(
     m = db.get(MatierePremiere, id_matiere)
     if not m:
         raise HTTPException(404, "Raw material not found")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+
+    updates = payload.model_dump(exclude_unset=True)
+
+    if "prix_au_kg" in updates and updates["prix_au_kg"] != m.prix_au_kg:
+        db.add(HistoriquePrixMatiere(
+            id_matiere=m.id_matiere,
+            ancien_prix=m.prix_au_kg,
+            nouveau_prix=updates["prix_au_kg"],
+        ))
+
+    for field, value in updates.items():
         setattr(m, field, value)
     db.commit()
     db.refresh(m)
