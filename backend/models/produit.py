@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, ForeignKey, Text, Boolean
+from sqlalchemy import Column, Integer, String, Numeric, ForeignKey, Text, Boolean, DateTime, func
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -110,3 +110,20 @@ class PieceExterne(Base):
     description      = Column(String(500), nullable=True)
     fournisseur      = Column(String(255), nullable=True)
     prix_unitaire    = Column(Numeric(12, 2), nullable=True)   # €/unit
+
+    historique_prix = relationship("HistoriquePrixPieceExterne", back_populates="piece_externe",
+                                   cascade="all, delete-orphan",
+                                   order_by="HistoriquePrixPieceExterne.date_modification.desc()")
+
+
+class HistoriquePrixPieceExterne(Base):
+    """Historique des modifications de prix_unitaire d'une pièce externe."""
+    __tablename__ = "historiqueprixpieceexterne"
+
+    id_historique      = Column(Integer, primary_key=True, autoincrement=True)
+    id_piece_externe    = Column(Integer, ForeignKey("piece_externe.id_piece_externe"), nullable=False)
+    ancien_prix         = Column(Numeric(12, 2), nullable=True)
+    nouveau_prix        = Column(Numeric(12, 2), nullable=True)
+    date_modification   = Column(DateTime, nullable=False, server_default=func.now())
+
+    piece_externe = relationship("PieceExterne", back_populates="historique_prix")

@@ -17,6 +17,7 @@ export default function PiecesExternes() {
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState('')
   const [selected, setSelected]   = useState(null)
+  const [priceHistory, setPriceHistory] = useState([])
   const [showForm, setShowForm]   = useState(false)
   const [formData, setFormData]   = useState(EMPTY_FORM)
   const [formMode, setFormMode]   = useState('create')
@@ -41,6 +42,13 @@ export default function PiecesExternes() {
   }, [search, page])
 
   useEffect(() => { fetchItems() }, [fetchItems])
+
+  useEffect(() => {
+    if (!selected) { setPriceHistory([]); return }
+    api.get(`/external-parts/${selected.id_piece_externe}/historique-prix`)
+      .then(({ data }) => setPriceHistory(data))
+      .catch(() => setPriceHistory([]))
+  }, [selected])
 
   const handleSearch = (e) => { setSearch(e.target.value); setPage(1) }
 
@@ -196,6 +204,26 @@ export default function PiecesExternes() {
               <div className="detail-full"><label>Description</label><span>{selected.description}</span></div>
             )}
           </div>
+
+          {priceHistory.length > 0 && (
+            <div className="price-history">
+              <h4>Price History</h4>
+              <table className="data-table">
+                <thead>
+                  <tr><th>Date</th><th>Old Price</th><th>New Price</th></tr>
+                </thead>
+                <tbody>
+                  {priceHistory.map((h, i) => (
+                    <tr key={i}>
+                      <td>{new Date(h.date_modification).toLocaleString()}</td>
+                      <td>{h.ancien_prix != null ? `${h.ancien_prix.toFixed(2)} €` : '—'}</td>
+                      <td>{h.nouveau_prix != null ? `${h.nouveau_prix.toFixed(2)} €` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

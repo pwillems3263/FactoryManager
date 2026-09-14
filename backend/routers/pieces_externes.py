@@ -5,12 +5,13 @@ CRUD External Parts (PieceExterne)
 """
 
 from typing import Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from auth import require_permission, get_db
-from models import PieceExterne, Composant
+from models import PieceExterne, Composant, HistoriquePrixPieceExterne
 
 router = APIRouter(prefix="/external-parts", tags=["External Parts"])
 
@@ -102,6 +103,43 @@ def get_piece(
     return _to_response(p, db)
 
 
+class HistoriquePrixResponse(BaseModel):
+    ancien_prix: Optional[float]
+    nouveau_prix: Optional[float]
+    date_modification: str
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/{id_piece_externe}/historique-prix", response_model=list[HistoriquePrixResponse])
+def get_historique_prix(
+    id_piece_externe: int,
+    db:               Session = Depends(get_db),
+    _user                     = Depends(require_permission("external_parts")),
+):
+    p = db.get(PieceExterne, id_piece_externe)
+    if not p:
+        raise HTTPException(404, "External part not found")
+
+    if not p.historique_prix:
+        prix = float(p.prix_unitaire) if p.prix_unitaire is not None else None
+        return [HistoriquePrixResponse(
+            ancien_prix=prix,
+            nouveau_prix=prix,
+            date_modification=datetime.utcnow().isoformat(),
+        )]
+
+    return [
+        HistoriquePrixResponse(
+            ancien_prix=float(h.ancien_prix) if h.ancien_prix is not None else None,
+            nouveau_prix=float(h.nouveau_prix) if h.nouveau_prix is not None else None,
+            date_modification=h.date_modification.isoformat(),
+        )
+        for h in p.historique_prix
+    ]
+
+
 @router.post("", response_model=PieceExterneResponse, status_code=201)
 def create_piece(
     payload: PieceExterneCreate,
@@ -110,6 +148,14 @@ def create_piece(
 ):
     p = PieceExterne(**payload.model_dump())
     db.add(p)
+    db.flush()  # obtenir p.id_piece_externe avant de créer l'historique
+
+    db.add(HistoriquePrixPieceExterne(
+        id_piece_externe=p.id_piece_externe,
+        ancien_prix=None,
+        nouveau_prix=p.prix_unitaire,
+    ))
+
     db.commit()
     db.refresh(p)
     return _to_response(p, db)
@@ -125,7 +171,17 @@ def update_piece(
     p = db.get(PieceExterne, id_piece_externe)
     if not p:
         raise HTTPException(404, "External part not found")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+
+    updates = payload.model_dump(exclude_unset=True)
+
+    if "prix_unitaire" in updates and updates["prix_unitaire"] != p.prix_unitaire:
+        db.add(HistoriquePrixPieceExterne(
+            id_piece_externe=p.id_piece_externe,
+            ancien_prix=p.prix_unitaire,
+            nouveau_prix=updates["prix_unitaire"],
+        ))
+
+    for field, value in updates.items():
         setattr(p, field, value)
     db.commit()
     db.refresh(p)
