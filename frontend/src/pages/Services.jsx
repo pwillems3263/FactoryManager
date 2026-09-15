@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Layout from '../components/Layout'
 import api from '../api/client'
 import './modules.css'
+import { useDraggable } from '../hooks/useDraggable'
 
 const EMPTY_FORM = {
   code_produit: '', nom: '', description: '',
@@ -22,6 +23,7 @@ export default function Services() {
   const [formMode, setFormMode]   = useState('create')
   const [saving, setSaving]       = useState(false)
   const [formError, setFormError] = useState('')
+  const dragForm = useDraggable()
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
@@ -98,7 +100,7 @@ export default function Services() {
       } else {
         await api.put(`/services/${selected.id_service}`, payload)
       }
-      setShowForm(false)
+      setShowForm(false); dragForm.reset()
       setSelected(null)
       fetchItems()
     } catch (err) {
@@ -211,11 +213,11 @@ export default function Services() {
       )}
 
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
+        <div className="modal-overlay" onClick={() => { setShowForm(false); dragForm.reset() }}>
+          <div className="modal" style={{ transform: `translate(${dragForm.pos.x}px, ${dragForm.pos.y}px)` }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header" onMouseDown={dragForm.onMouseDown} style={{ cursor: 'grab', userSelect: 'none' }}>
               <h3>{formMode === 'create' ? '+ New Service' : '✏ Edit Service'}</h3>
-              <button className="modal-close" onClick={() => setShowForm(false)}>✕</button>
+              <button className="modal-close" onClick={() => { setShowForm(false); dragForm.reset() }}>✕</button>
             </div>
             <form onSubmit={handleSubmit} className="modal-form">
               {formError && <div className="alert alert-error">{formError}</div>}
@@ -262,7 +264,7 @@ export default function Services() {
               </div>
 
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowForm(false); dragForm.reset() }}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={saving}>
                   {saving ? 'Saving...' : 'Save'}
                 </button>

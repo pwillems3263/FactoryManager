@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Layout from '../components/Layout'
 import api from '../api/client'
 import './modules.css'
+import { useDraggable } from '../hooks/useDraggable'
 
 const PRIORITY_COLORS = { 1: '#e74c3c', 2: '#e67e22', 3: '#f39c12', 4: '#f39c12', 5: '#27ae60' }
 const PRIORITY_LABELS = { 1: 'Urgent', 2: 'High', 3: 'Elevated', 4: 'Elevated', 5: 'Normal' }
@@ -38,6 +39,7 @@ export default function WorkOrders() {
   const [editPrio, setEditPrio]   = useState(5)
   const [editStatut, setEditStatut] = useState('')
   const [saving, setSaving]       = useState(false)
+  const dragEdit = useDraggable()
 
   const fetchWOs = useCallback(async () => {
     setLoading(true)
@@ -76,7 +78,7 @@ export default function WorkOrders() {
         priorite: editPrio,
         statut:   editStatut,
       })
-      setShowEdit(false)
+      setShowEdit(false); dragEdit.reset()
       fetchWOs()
       fetchDetail(selected.id_of_assemblage)
     } catch (err) {
@@ -238,11 +240,11 @@ export default function WorkOrders() {
 
       {/* Edit Priority/Status Modal */}
       {showEdit && selected && (
-        <div className="modal-overlay" onClick={() => setShowEdit(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
+        <div className="modal-overlay" onClick={() => { setShowEdit(false); dragEdit.reset() }}>
+          <div className="modal" style={{ transform: `translate(${dragEdit.pos.x}px, ${dragEdit.pos.y}px)` }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header" onMouseDown={dragEdit.onMouseDown} style={{ cursor: 'grab', userSelect: 'none' }}>
               <h3>✏ Edit — {selected.assemblage_nom}</h3>
-              <button className="modal-close" onClick={() => setShowEdit(false)}>✕</button>
+              <button className="modal-close" onClick={() => { setShowEdit(false); dragEdit.reset() }}>✕</button>
             </div>
             <div className="modal-form">
               <div className="form-group">
@@ -265,7 +267,7 @@ export default function WorkOrders() {
                 </select>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowEdit(false)}>Cancel</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowEdit(false); dragEdit.reset() }}>Cancel</button>
                 <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                   {saving ? 'Saving...' : 'Save'}
                 </button>

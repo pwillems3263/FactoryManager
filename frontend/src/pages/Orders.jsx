@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Layout from '../components/Layout'
 import api from '../api/client'
 import './modules.css'
+import { useDraggable } from '../hooks/useDraggable'
 
 const today = new Date().toISOString().split('T')[0]
 
@@ -36,6 +37,8 @@ export default function Orders() {
   const [assemblies, setAssemblies] = useState([])
   const [lineAsm, setLineAsm]       = useState('')
   const [lineQty, setLineQty]       = useState('1')
+  const dragForm = useDraggable()
+  const dragLineForm = useDraggable()
 
   const fetchOrders = useCallback(async () => {
     setLoading(true)
@@ -104,7 +107,7 @@ export default function Orders() {
     try {
       if (formMode === 'create') await api.post('/orders', payload)
       else await api.put(`/orders/${selected.id_commande}`, payload)
-      setShowForm(false); setSelected(null); fetchOrders()
+      setShowForm(false); dragForm.reset(); setSelected(null); fetchOrders()
     } catch (err) { setFormError(err.response?.data?.detail || 'Error saving order') }
     finally { setSaving(false) }
   }
@@ -116,7 +119,7 @@ export default function Orders() {
         id_assemblage: parseInt(lineAsm),
         quantite: parseInt(lineQty),
       })
-      setShowLineForm(false)
+      setShowLineForm(false); dragLineForm.reset()
       fetchDetail(selected.id_commande)
       fetchOrders()
     } catch (err) { alert(err.response?.data?.detail || 'Error adding line') }
@@ -282,11 +285,11 @@ export default function Orders() {
 
       {/* Order Form Modal */}
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
+        <div className="modal-overlay" onClick={() => { setShowForm(false); dragForm.reset() }}>
+          <div className="modal" style={{ transform: `translate(${dragForm.pos.x}px, ${dragForm.pos.y}px)` }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header" onMouseDown={dragForm.onMouseDown} style={{ cursor: 'grab', userSelect: 'none' }}>
               <h3>{formMode === 'create' ? '+ New Order' : '✏ Edit Order'}</h3>
-              <button className="modal-close" onClick={() => setShowForm(false)}>✕</button>
+              <button className="modal-close" onClick={() => { setShowForm(false); dragForm.reset() }}>✕</button>
             </div>
             <form onSubmit={handleSubmit} className="modal-form">
               {formError && <div className="alert alert-error">{formError}</div>}
@@ -327,7 +330,7 @@ export default function Orders() {
                 </select>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowForm(false); dragForm.reset() }}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
               </div>
             </form>
@@ -337,11 +340,11 @@ export default function Orders() {
 
       {/* Add Line Modal */}
       {showLineForm && selected && (
-        <div className="modal-overlay" onClick={() => setShowLineForm(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
+        <div className="modal-overlay" onClick={() => { setShowLineForm(false); dragLineForm.reset() }}>
+          <div className="modal" style={{ transform: `translate(${dragLineForm.pos.x}px, ${dragLineForm.pos.y}px)` }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header" onMouseDown={dragLineForm.onMouseDown} style={{ cursor: 'grab', userSelect: 'none' }}>
               <h3>+ Add Order Line</h3>
-              <button className="modal-close" onClick={() => setShowLineForm(false)}>✕</button>
+              <button className="modal-close" onClick={() => { setShowLineForm(false); dragLineForm.reset() }}>✕</button>
             </div>
             <div className="modal-form">
               <div className="form-group">
@@ -365,7 +368,7 @@ export default function Orders() {
                   }} />
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowLineForm(false)}>Cancel</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowLineForm(false); dragLineForm.reset() }}>Cancel</button>
                 <button className="btn btn-primary" onClick={handleAddLine} disabled={!lineAsm}>Add Line</button>
               </div>
             </div>

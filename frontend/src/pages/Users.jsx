@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Layout from '../components/Layout'
 import api from '../api/client'
 import './modules.css'
+import { useDraggable } from '../hooks/useDraggable'
 
 const NIVEAU_LABELS = { 1: 'Operator', 2: 'Coordinator', 3: 'Manager', 4: 'Administrator' }
 const NIVEAU_COLORS = { 1: '#27ae60', 2: '#3498db', 3: '#e67e22', 4: '#e74c3c' }
@@ -20,6 +21,8 @@ export default function Users() {
   const [formError, setFormError] = useState('')
   const [showPwd, setShowPwd]     = useState(false)
   const [newPwd, setNewPwd]       = useState('')
+  const dragForm = useDraggable()
+  const dragPwd = useDraggable()
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -83,7 +86,7 @@ export default function Users() {
           actif:     formData.actif,
         })
       }
-      setShowForm(false); setSelected(null); fetchUsers()
+      setShowForm(false); dragForm.reset(); setSelected(null); fetchUsers()
     } catch (err) { setFormError(err.response?.data?.detail || 'Error saving user') }
     finally { setSaving(false) }
   }
@@ -92,7 +95,7 @@ export default function Users() {
     if (!newPwd) return
     try {
       await api.put(`/users/${selected.id_user}/password`, { new_password: newPwd })
-      setShowPwd(false); setNewPwd('')
+      setShowPwd(false); dragPwd.reset(); setNewPwd('')
       alert('Password updated successfully')
     } catch (err) { alert(err.response?.data?.detail || 'Error changing password') }
   }
@@ -182,11 +185,11 @@ export default function Users() {
 
       {/* User Form Modal */}
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
+        <div className="modal-overlay" onClick={() => { setShowForm(false); dragForm.reset() }}>
+          <div className="modal" style={{ transform: `translate(${dragForm.pos.x}px, ${dragForm.pos.y}px)` }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header" onMouseDown={dragForm.onMouseDown} style={{ cursor: 'grab', userSelect: 'none' }}>
               <h3>{formMode === 'create' ? '+ New User' : '✏ Edit User'}</h3>
-              <button className="modal-close" onClick={() => setShowForm(false)}>✕</button>
+              <button className="modal-close" onClick={() => { setShowForm(false); dragForm.reset() }}>✕</button>
             </div>
             <form onSubmit={handleSubmit} className="modal-form">
               {formError && <div className="alert alert-error">{formError}</div>}
@@ -229,7 +232,7 @@ export default function Users() {
               </div>
 
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowForm(false); dragForm.reset() }}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={saving}>
                   {saving ? 'Saving...' : 'Save'}
                 </button>
@@ -241,11 +244,11 @@ export default function Users() {
 
       {/* Change Password Modal */}
       {showPwd && selected && (
-        <div className="modal-overlay" onClick={() => setShowPwd(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
+        <div className="modal-overlay" onClick={() => { setShowPwd(false); dragPwd.reset() }}>
+          <div className="modal" style={{ transform: `translate(${dragPwd.pos.x}px, ${dragPwd.pos.y}px)` }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header" onMouseDown={dragPwd.onMouseDown} style={{ cursor: 'grab', userSelect: 'none' }}>
               <h3>🔑 Change Password — {selected.username}</h3>
-              <button className="modal-close" onClick={() => setShowPwd(false)}>✕</button>
+              <button className="modal-close" onClick={() => { setShowPwd(false); dragPwd.reset() }}>✕</button>
             </div>
             <div className="modal-form">
               <div className="form-group">
@@ -254,7 +257,7 @@ export default function Users() {
                   placeholder="New password" autoFocus />
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowPwd(false)}>Cancel</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowPwd(false); dragPwd.reset() }}>Cancel</button>
                 <button className="btn btn-primary" onClick={handlePasswordChange} disabled={!newPwd}>
                   Change Password
                 </button>

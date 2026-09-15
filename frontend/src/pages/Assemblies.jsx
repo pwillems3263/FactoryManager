@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Layout from '../components/Layout'
 import api from '../api/client'
 import './modules.css'
+import { useDraggable } from '../hooks/useDraggable'
 
 const EMPTY_FORM = { nom: '', reference: '', description: '', plan_url: '' }
 const TYPE_LABELS = { component: '📦 Component', service: '⚙️ Service', external_part: '🔩 External Part' }
@@ -30,6 +31,8 @@ export default function Assemblies() {
   const [components, setComponents] = useState([])
   const [services, setServices]     = useState([])
   const [extParts, setExtParts]     = useState([])
+  const dragForm = useDraggable()
+  const dragBomForm = useDraggable()
 
   const fetchAssemblies = useCallback(async () => {
     setLoading(true)
@@ -94,7 +97,7 @@ export default function Assemblies() {
     try {
       if (formMode === 'create') await api.post('/assemblies', payload)
       else await api.put(`/assemblies/${selected.id_assemblage}`, payload)
-      setShowForm(false); setSelected(null); fetchAssemblies()
+      setShowForm(false); dragForm.reset(); setSelected(null); fetchAssemblies()
     } catch (err) { setFormError(err.response?.data?.detail || 'Error saving assembly') }
     finally { setSaving(false) }
   }
@@ -129,7 +132,7 @@ export default function Assemblies() {
     }
     try {
       await api.post(`/assemblies/${selected.id_assemblage}/bom`, payload)
-      setShowBomForm(false)
+      setShowBomForm(false); dragBomForm.reset()
       fetchBom(selected.id_assemblage)
       fetchAssemblies()
       refreshSelected(selected.id_assemblage)
@@ -259,11 +262,11 @@ export default function Assemblies() {
 
       {/* Assembly Form */}
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
+        <div className="modal-overlay" onClick={() => { setShowForm(false); dragForm.reset() }}>
+          <div className="modal" style={{ transform: `translate(${dragForm.pos.x}px, ${dragForm.pos.y}px)` }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header" onMouseDown={dragForm.onMouseDown} style={{ cursor: 'grab', userSelect: 'none' }}>
               <h3>{formMode === 'create' ? '+ New Assembly' : '✏ Edit Assembly'}</h3>
-              <button className="modal-close" onClick={() => setShowForm(false)}>✕</button>
+              <button className="modal-close" onClick={() => { setShowForm(false); dragForm.reset() }}>✕</button>
             </div>
             <form onSubmit={handleSubmit} className="modal-form">
               {formError && <div className="alert alert-error">{formError}</div>}
@@ -286,7 +289,7 @@ export default function Assemblies() {
                 <input value={formData.plan_url} onChange={e => setFormData(p => ({ ...p, plan_url: e.target.value }))} placeholder="https://..." />
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowForm(false); dragForm.reset() }}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
               </div>
             </form>
@@ -296,11 +299,11 @@ export default function Assemblies() {
 
       {/* BOM Add Form */}
       {showBomForm && selected && (
-        <div className="modal-overlay" onClick={() => setShowBomForm(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
+        <div className="modal-overlay" onClick={() => { setShowBomForm(false); dragBomForm.reset() }}>
+          <div className="modal" style={{ transform: `translate(${dragBomForm.pos.x}px, ${dragBomForm.pos.y}px)` }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header" onMouseDown={dragBomForm.onMouseDown} style={{ cursor: 'grab', userSelect: 'none' }}>
               <h3>+ Add BOM Item</h3>
-              <button className="modal-close" onClick={() => setShowBomForm(false)}>✕</button>
+              <button className="modal-close" onClick={() => { setShowBomForm(false); dragBomForm.reset() }}>✕</button>
             </div>
             <div className="modal-form">
               <div className="form-group">
@@ -328,7 +331,7 @@ export default function Assemblies() {
                   }} />
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowBomForm(false)}>Cancel</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowBomForm(false); dragBomForm.reset() }}>Cancel</button>
                 <button className="btn btn-primary" onClick={handleAddBom} disabled={!bomSelected}>Add</button>
               </div>
             </div>

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Layout from '../components/Layout'
 import api from '../api/client'
 import './Composants.css'
+import { useDraggable } from '../hooks/useDraggable'
 
 const TYPE_OPTIONS = ['machining', 'welding', 'assembly', 'other']
 
@@ -26,6 +27,8 @@ export default function Composants() {
   const [formMode, setFormMode]   = useState('create')
   const [saving, setSaving]       = useState(false)
   const [formError, setFormError] = useState('')
+  const dragForm = useDraggable()
+  const dragOpForm = useDraggable()
   const [matieres, setMatieres]   = useState([])
 
   // ── Manufacturing Routing (Gamme) ──────────────────────────────────────
@@ -166,7 +169,7 @@ export default function Composants() {
       } else {
         await api.put(`/composants/${selected.id_composant}`, payload)
       }
-      setShowForm(false)
+      setShowForm(false); dragForm.reset()
       setSelected(null)
       fetchComposants()
     } catch (err) {
@@ -225,7 +228,7 @@ export default function Composants() {
       } else {
         await api.put(`/composants/${selected.id_composant}/gamme/operations/${opFormData.id_operation}`, payload)
       }
-      setShowOpForm(false)
+      setShowOpForm(false); dragOpForm.reset()
       fetchGamme(selected.id_composant)
       fetchComposants()
       refreshSelected(selected.id_composant)
@@ -404,11 +407,11 @@ export default function Composants() {
       )}
 
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
+        <div className="modal-overlay" onClick={() => { setShowForm(false); dragForm.reset() }}>
+          <div className="modal" style={{ transform: `translate(${dragForm.pos.x}px, ${dragForm.pos.y}px)` }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header" onMouseDown={dragForm.onMouseDown} style={{ cursor: 'grab', userSelect: 'none' }}>
               <h3>{formMode === 'create' ? '+ New Component' : '✏ Edit Component'}</h3>
-              <button className="modal-close" onClick={() => setShowForm(false)}>✕</button>
+              <button className="modal-close" onClick={() => { setShowForm(false); dragForm.reset() }}>✕</button>
             </div>
 
             <form onSubmit={handleSubmit} className="modal-form">
@@ -510,7 +513,7 @@ export default function Composants() {
               </div>
 
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowForm(false); dragForm.reset() }}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={saving}>
                   {saving ? 'Saving...' : 'Save'}
                 </button>
@@ -522,11 +525,11 @@ export default function Composants() {
 
       {/* Operation (routing step) Form Modal */}
       {showOpForm && (
-        <div className="modal-overlay" onClick={() => setShowOpForm(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
+        <div className="modal-overlay" onClick={() => { setShowOpForm(false); dragOpForm.reset() }}>
+          <div className="modal" style={{ transform: `translate(${dragOpForm.pos.x}px, ${dragOpForm.pos.y}px)` }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header" onMouseDown={dragOpForm.onMouseDown} style={{ cursor: 'grab', userSelect: 'none' }}>
               <h3>{opFormMode === 'create' ? '+ Add Operation' : '✏ Edit Operation'}</h3>
-              <button className="modal-close" onClick={() => setShowOpForm(false)}>✕</button>
+              <button className="modal-close" onClick={() => { setShowOpForm(false); dragOpForm.reset() }}>✕</button>
             </div>
 
             <form onSubmit={handleOpSubmit} className="modal-form">
@@ -606,7 +609,7 @@ export default function Composants() {
               )}
 
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowOpForm(false)}>Cancel</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowOpForm(false); dragOpForm.reset() }}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={opSaving}>
                   {opSaving ? 'Saving...' : 'Save'}
                 </button>
