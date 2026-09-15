@@ -11,8 +11,9 @@ class Commande(Base):
     client        = Column(String(255), nullable=False)
     numero_externe = Column(String(100), nullable=True)
     code_commande = Column(String(8), nullable=True)  # ex: "2604-001"
-    date_livraison = Column(Date, nullable=True)
-    statut        = Column(String(50), nullable=False, default="planifiee")
+    date_livraison = Column(Date, nullable=True)  # estimated delivery date — frozen once Part. Confirmed / Confirmed
+    date_livraison_reelle = Column(Date, nullable=True)  # actual delivery date — recorded when the order is Finished, kept separate so the two can be compared later
+    statut        = Column(String(50), nullable=False, default="estimation")
 
     lignes = relationship("LigneCommande", back_populates="commande",
                           cascade="all, delete-orphan")

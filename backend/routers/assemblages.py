@@ -74,6 +74,10 @@ class BOMAddItem(BaseModel):
     type_parent:     str = "assemblage"
 
 
+class BOMUpdateItem(BaseModel):
+    quantite: int  # whole units only
+
+
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def _to_response(a: Assemblage, db: Session) -> AssemblageResponse:
@@ -231,10 +235,15 @@ def delete_assembly(id_assemblage: int, db: Session = Depends(get_db),
 @router.get("/{id_assemblage}/bom", response_model=list[BOMItemResponse])
 def get_bom(id_assemblage: int, db: Session = Depends(get_db),
             _user=Depends(require_permission("assemblies"))):
+    # Explicit ordering matters here: without it, PostgreSQL can return rows
+    # in whatever physical order they happen to sit in (an UPDATE — like
+    # editing a quantity — moves a row's physical location under MVCC),
+    # which looked like the list was "sorting by quantity" after an edit.
+    # Ordering by id_nomenclature keeps items in the order they were added.
     items = db.query(Nomenclature).filter(
         Nomenclature.id_parent == id_assemblage,
         Nomenclature.type_parent == "assemblage"
-    ).all()
+    ).order_by(Nomenclature.id_nomenclature).all()
     return [_bom_item(n, db) for n in items if _bom_item(n, db)]
 
 
@@ -255,6 +264,25 @@ def add_bom_item(id_assemblage: int, payload: BOMAddItem,
         id_piece_externe=payload.id_piece_externe,
     )
     db.add(n); db.commit(); db.refresh(n)
+
+    recalculer_assemblage(db, id_assemblage)
+    db.commit()
+
+    return _bom_item(n, db)
+
+
+@router.put("/{id_assemblage}/bom/{id_nomenclature}", response_model=BOMItemResponse)
+def update_bom_item(id_assemblage: int, id_nomenclature: int, payload: BOMUpdateItem,
+                    db: Session = Depends(get_db),
+                    _user=Depends(require_permission("assemblies"))):
+    n = db.get(Nomenclature, id_nomenclature)
+    if not n or n.id_parent != id_assemblage:
+        raise HTTPException(404, "BOM item not found")
+    if payload.quantite <= 0:
+        raise HTTPException(400, "Quantity must be greater than 0")
+
+    n.quantite = payload.quantite
+    db.commit(); db.refresh(n)
 
     recalculer_assemblage(db, id_assemblage)
     db.commit()

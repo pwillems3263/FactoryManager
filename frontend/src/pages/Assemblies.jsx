@@ -181,6 +181,40 @@ export default function Assemblies() {
     } catch (err) { alert(err.response?.data?.detail || 'Error adding BOM item') }
   }
 
+  const [qtyEdits, setQtyEdits] = useState({}) // { [id_nomenclature]: string being typed }
+  const [qtySaving, setQtySaving] = useState(null) // id_nomenclature currently saving
+
+  const handleQtyChange = (id_nomenclature, value) => {
+    setQtyEdits(prev => ({ ...prev, [id_nomenclature]: value }))
+  }
+
+  const handleQtyCommit = async (item) => {
+    const raw = qtyEdits[item.id_nomenclature]
+    if (raw === undefined) return // untouched, nothing to save
+    setQtyEdits(prev => { const n = { ...prev }; delete n[item.id_nomenclature]; return n })
+    const value = parseInt(raw, 10)
+    // Whole units only — reject non-integers (e.g. "2.5") instead of
+    // silently rounding, so the mistake is obvious to the person typing.
+    if (!Number.isInteger(value) || String(value) !== raw.trim() || value <= 0) {
+      if (raw.trim() !== '' && parseFloat(raw) !== item.quantite) {
+        alert('Quantity must be a whole number.')
+      }
+      return
+    }
+    if (value === item.quantite) return // unchanged
+    setQtySaving(item.id_nomenclature)
+    try {
+      await api.put(`/assemblies/${selected.id_assemblage}/bom/${item.id_nomenclature}`, { quantite: value })
+      fetchBom(selected.id_assemblage)
+      fetchAssemblies()
+      refreshSelected(selected.id_assemblage)
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Error updating quantity')
+    } finally {
+      setQtySaving(null)
+    }
+  }
+
   const handleRemoveBom = async (id_nomenclature) => {
     if (!window.confirm('Remove this item from BOM?')) return
     try {
@@ -286,7 +320,19 @@ export default function Assemblies() {
                         <td><span className={`badge ${TYPE_COLORS[item.type_item]}`}>{TYPE_LABELS[item.type_item]}</span></td>
                         <td>{item.item_reference || '—'}</td>
                         <td>{item.item_nom}</td>
-                        <td className="td-center" style={{ fontWeight: 700 }}>{item.quantite}</td>
+                        <td className="td-center">
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={qtyEdits[item.id_nomenclature] ?? item.quantite}
+                            disabled={qtySaving === item.id_nomenclature}
+                            onChange={e => handleQtyChange(item.id_nomenclature, e.target.value)}
+                            onBlur={() => handleQtyCommit(item)}
+                            onKeyDown={e => { if (e.key === 'Enter') e.target.blur() }}
+                            style={{ width: 70, textAlign: 'center', fontWeight: 700, padding: '4px 6px' }}
+                          />
+                        </td>
                         <td className="td-prix">{item.item_prix != null ? `${parseFloat(item.item_prix).toFixed(2)} €` : '—'}</td>
                         <td>
                           <button className="btn btn-danger" style={{ padding: '3px 8px', fontSize: '11px' }}

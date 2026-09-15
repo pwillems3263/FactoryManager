@@ -246,9 +246,12 @@ export default function Composants() {
     const needsTime = opFormData.step_type === 'machine'
       || (opFormData.step_type === 'service' && (!selectedService || selectedService.type_cout === 'horaire'))
 
+    // Services never use a separate setup time — only machines do.
+    const usesSetupTime = needsTime && opFormData.step_type === 'machine'
+
     const payload = {
       description: opFormData.description || null,
-      tps_preparation: needsTime ? (parseInt(opFormData.tps_preparation) || 0) : 0,
+      tps_preparation: usesSetupTime ? (parseInt(opFormData.tps_preparation) || 0) : 0,
       tps_execution: needsTime ? (parseInt(opFormData.tps_execution) || 0) : 0,
       plan_url: opFormData.plan_url || null,
       id_machine: opFormData.step_type === 'machine' && opFormData.id_machine ? parseInt(opFormData.id_machine) : null,
@@ -579,8 +582,14 @@ export default function Composants() {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Order</label>
+                  <label>
+                    Order
+                    {opFormMode === 'edit' && (
+                      <span style={{ fontWeight: 400, color: '#7f8c8d' }}> (use ↑ / ↓ in the table to reorder)</span>
+                    )}
+                  </label>
                   <input type="number" min="1" value={opFormData.ordre ?? ''}
+                    disabled={opFormMode === 'edit'}
                     onChange={e => setOpFormData(p => ({ ...p, ordre: e.target.value }))} />
                 </div>
                 <div className="form-group">
@@ -652,6 +661,21 @@ export default function Composants() {
                   )
                 }
 
+                if (opFormData.step_type === 'service') {
+                  // Hourly services only ever use "cycle time" in the cost
+                  // calculation (see cout_service.py) — there's no separate
+                  // setup time for a service, so showing that field would be
+                  // misleading. One single time field, used directly for costing.
+                  return (
+                    <div className="form-group">
+                      <label>Time (min/unit)</label>
+                      <input type="number" min="0" value={opFormData.tps_execution}
+                        onChange={e => setOpFormData(p => ({ ...p, tps_execution: e.target.value }))} />
+                    </div>
+                  )
+                }
+
+                // Machines: setup time (once) + cycle time (per unit)
                 return (
                   <div className="form-row">
                     <div className="form-group">
