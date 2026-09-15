@@ -4,10 +4,8 @@ import api from '../api/client'
 import './Composants.css'
 import { useDraggable } from '../hooks/useDraggable'
 
-const TYPE_OPTIONS = ['machining', 'welding', 'assembly', 'other']
-
 const EMPTY_FORM = {
-  reference: '', nom: '', type: '', description: '', plan_url: '',
+  reference: '', nom: '', description: '', plan_url: '',
   id_matiere_brut: '', forme_brut: '',
   brut_diametre: '', brut_diam_ext: '', brut_diam_int: '',
   brut_longueur: '', brut_largeur: '', brut_hauteur: '', brut_epaisseur: '',
@@ -30,6 +28,7 @@ export default function Composants() {
   const dragForm = useDraggable()
   const dragOpForm = useDraggable()
   const [matieres, setMatieres]   = useState([])
+  const [allRefs, setAllRefs]     = useState([]) // [{reference, nom}] across ALL components, for the reference datalist + duplicate check
 
   // ── Manufacturing Routing (Gamme) ──────────────────────────────────────
   const [gamme, setGamme]           = useState(null)
@@ -86,6 +85,24 @@ export default function Composants() {
     } catch { /* non-blocking */ }
   }, [])
 
+  const fetchAllRefs = useCallback(async () => {
+    // Backend caps "limit" at 200, so page through all results instead of
+    // relying on a single oversized request (which the API rejects with a
+    // 422 error, silently leaving the datalist empty).
+    try {
+      let all = []
+      let p = 1
+      let pages = 1
+      do {
+        const { data } = await api.get('/composants', { params: { page: p, limit: 200 } })
+        all = all.concat(data.items)
+        pages = data.pages
+        p += 1
+      } while (p <= pages)
+      setAllRefs(all.map(i => ({ reference: i.reference || '', nom: i.nom, id_composant: i.id_composant })))
+    } catch { /* non-blocking */ }
+  }, [])
+
   const fetchComposants = useCallback(async () => {
     setLoading(true)
     try {
@@ -106,6 +123,7 @@ export default function Composants() {
   useEffect(() => { fetchComposants() }, [fetchComposants])
   useEffect(() => { fetchMatieres() }, [fetchMatieres])
   useEffect(() => { fetchResources() }, [fetchResources])
+  useEffect(() => { fetchAllRefs() }, [fetchAllRefs])
   useEffect(() => { fetchGamme(selected?.id_composant) }, [selected, fetchGamme])
 
   const handleSearch = (e) => { setSearch(e.target.value); setPage(1) }
@@ -122,7 +140,6 @@ export default function Composants() {
     setFormData({
       reference:      selected.reference      || '',
       nom:            selected.nom            || '',
-      type:           selected.type           || '',
       description:    selected.description    || '',
       plan_url:       selected.plan_url       || '',
       id_matiere_brut: selected.id_matiere_brut || '',
@@ -154,8 +171,15 @@ export default function Composants() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setSaving(true)
     setFormError('')
+    if (formMode === 'create' && formData.reference.trim()) {
+      const dup = allRefs.find(r => r.reference.trim().toLowerCase() === formData.reference.trim().toLowerCase())
+      if (dup) {
+        setFormError(`Reference "${formData.reference}" is already used by "${dup.nom}". Please change the reference.`)
+        return
+      }
+    }
+    setSaving(true)
     const payload = { ...formData }
     const numFields = ['id_matiere_brut','brut_diametre','brut_diam_ext','brut_diam_int',
                        'brut_longueur','brut_largeur','brut_hauteur','brut_epaisseur']
@@ -172,6 +196,7 @@ export default function Composants() {
       setShowForm(false); dragForm.reset()
       setSelected(null)
       fetchComposants()
+      fetchAllRefs()
     } catch (err) {
       setFormError(err.response?.data?.detail || 'Error saving component')
     } finally {
@@ -211,10 +236,20 @@ export default function Composants() {
     e.preventDefault()
     setOpSaving(true)
     setOpFormError('')
+    // A service billed "per kg" or "fixed price" doesn't use operation time
+    // in its cost calculation — force it to 0 regardless of stale form state,
+    // so switching a service's cost type later can't leave misleading minutes
+    // behind on existing routing steps.
+    const selectedService = opFormData.step_type === 'service'
+      ? servicesList.find(s => String(s.id_service) === String(opFormData.id_service))
+      : null
+    const needsTime = opFormData.step_type === 'machine'
+      || (opFormData.step_type === 'service' && (!selectedService || selectedService.type_cout === 'horaire'))
+
     const payload = {
       description: opFormData.description || null,
-      tps_preparation: parseInt(opFormData.tps_preparation) || 0,
-      tps_execution: parseInt(opFormData.tps_execution) || 0,
+      tps_preparation: needsTime ? (parseInt(opFormData.tps_preparation) || 0) : 0,
+      tps_execution: needsTime ? (parseInt(opFormData.tps_execution) || 0) : 0,
       plan_url: opFormData.plan_url || null,
       id_machine: opFormData.step_type === 'machine' && opFormData.id_machine ? parseInt(opFormData.id_machine) : null,
       id_service: opFormData.step_type === 'service' && opFormData.id_service ? parseInt(opFormData.id_service) : null,
@@ -257,7 +292,18 @@ export default function Composants() {
   }
 
   const handleChange = (e) => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }))
+    const { name, value } = e.target
+    setFormData(prev => {
+      const next = { ...prev, [name]: value }
+      // When creating, picking an existing reference from the suggestion list
+      // also loads that component's name, so the user can see what they're
+      // about to collide with before changing the reference.
+      if (name === 'reference' && formMode === 'create') {
+        const match = allRefs.find(r => r.reference.trim().toLowerCase() === value.trim().toLowerCase())
+        if (match) next.nom = match.nom
+      }
+      return next
+    })
   }
 
   return (
@@ -292,7 +338,6 @@ export default function Composants() {
             <tr>
               <th>Reference</th>
               <th>Name</th>
-              <th>Type</th>
               <th>Material</th>
               <th>Cost Price</th>
               <th>Routings</th>
@@ -300,9 +345,9 @@ export default function Composants() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="table-loading">Loading...</td></tr>
+              <tr><td colSpan={5} className="table-loading">Loading...</td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={6} className="table-empty">No components found</td></tr>
+              <tr><td colSpan={5} className="table-empty">No components found</td></tr>
             ) : items.map((c) => (
               <tr
                 key={c.id_composant}
@@ -312,7 +357,6 @@ export default function Composants() {
               >
                 <td>{c.reference || '—'}</td>
                 <td className="td-nom">{c.nom}</td>
-                <td>{c.type || '—'}</td>
                 <td>{c.matiere_nom || '—'}</td>
                 <td className="td-prix">
                   {c.prix_revient != null ? `${parseFloat(c.prix_revient).toFixed(2)} €` : '—'}
@@ -341,7 +385,6 @@ export default function Composants() {
           <h3>Details — {selected.nom}</h3>
           <div className="detail-grid">
             <div><label>Reference</label><span>{selected.reference || '—'}</span></div>
-            <div><label>Type</label><span>{selected.type || '—'}</span></div>
             <div><label>Raw Material</label><span>{selected.matiere_nom || '—'}</span></div>
             <div><label>Raw Shape</label><span>{selected.forme_brut || '—'}</span></div>
             <div><label>Cost Price</label>
@@ -419,8 +462,14 @@ export default function Composants() {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Reference</label>
-                  <input name="reference" value={formData.reference} onChange={handleChange} placeholder="e.g. COMP-001" />
+                  <label>Reference{formMode === 'edit' && <span style={{ fontWeight: 400, color: '#7f8c8d' }}> (locked after creation)</span>}</label>
+                  <input name="reference" value={formData.reference} onChange={handleChange}
+                    placeholder="e.g. COMP-001" list="composant-references" autoComplete="off"
+                    disabled={formMode === 'edit'}
+                    title={formMode === 'edit' ? 'Reference cannot be changed once the component exists — it may already be used in assemblies or orders.' : undefined} />
+                  <datalist id="composant-references">
+                    {allRefs.map(r => <option key={r.id_composant} value={r.reference} />)}
+                  </datalist>
                 </div>
                 <div className="form-group">
                   <label>Name *</label>
@@ -429,13 +478,6 @@ export default function Composants() {
               </div>
 
               <div className="form-row">
-                <div className="form-group">
-                  <label>Type</label>
-                  <select name="type" value={formData.type} onChange={handleChange}>
-                    <option value="">— Select —</option>
-                    {TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
                 <div className="form-group">
                   <label>Raw Material</label>
                   <select name="id_matiere_brut" value={formData.id_matiere_brut} onChange={handleChange}>
@@ -548,25 +590,6 @@ export default function Composants() {
                 </div>
               </div>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Setup time (min)</label>
-                  <input type="number" min="0" value={opFormData.tps_preparation}
-                    onChange={e => setOpFormData(p => ({ ...p, tps_preparation: e.target.value }))} />
-                </div>
-                <div className="form-group">
-                  <label>Cycle time (min/unit)</label>
-                  <input type="number" min="0" value={opFormData.tps_execution}
-                    onChange={e => setOpFormData(p => ({ ...p, tps_execution: e.target.value }))} />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Drawing URL</label>
-                <input value={opFormData.plan_url} placeholder="https://..."
-                  onChange={e => setOpFormData(p => ({ ...p, plan_url: e.target.value }))} />
-              </div>
-
               <div className="form-group">
                 <label>Step Type</label>
                 <select value={opFormData.step_type}
@@ -607,6 +630,49 @@ export default function Composants() {
                   </select>
                 </div>
               )}
+
+              {(() => {
+                // A service billed "per kg" or "fixed price" needs no operation
+                // time: its cost doesn't depend on how long the step takes, so
+                // asking for minutes there would be misleading. Machines always
+                // need time; external parts are priced per unit regardless of time.
+                const selectedService = opFormData.step_type === 'service'
+                  ? servicesList.find(s => String(s.id_service) === String(opFormData.id_service))
+                  : null
+                const needsTime = opFormData.step_type === 'machine'
+                  || (opFormData.step_type === 'service' && (!selectedService || selectedService.type_cout === 'horaire'))
+
+                if (!needsTime) {
+                  return (
+                    <p style={{ color: '#7f8c8d', fontSize: 12 }}>
+                      {selectedService?.type_cout === 'poids'
+                        ? "This service is priced by weight — cost is computed automatically from the component's raw stock, no time needed."
+                        : "This service has a fixed price — no time needed."}
+                    </p>
+                  )
+                }
+
+                return (
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Setup time (min)</label>
+                      <input type="number" min="0" value={opFormData.tps_preparation}
+                        onChange={e => setOpFormData(p => ({ ...p, tps_preparation: e.target.value }))} />
+                    </div>
+                    <div className="form-group">
+                      <label>Cycle time (min/unit)</label>
+                      <input type="number" min="0" value={opFormData.tps_execution}
+                        onChange={e => setOpFormData(p => ({ ...p, tps_execution: e.target.value }))} />
+                    </div>
+                  </div>
+                )
+              })()}
+
+              <div className="form-group">
+                <label>Drawing URL</label>
+                <input value={opFormData.plan_url} placeholder="https://..."
+                  onChange={e => setOpFormData(p => ({ ...p, plan_url: e.target.value }))} />
+              </div>
 
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => { setShowOpForm(false); dragOpForm.reset() }}>Cancel</button>

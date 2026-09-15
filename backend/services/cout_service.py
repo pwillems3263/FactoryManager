@@ -10,13 +10,17 @@ def format_prix(valeur) -> str:
     return f"{float(valeur):,.2f} €".replace(",", "\u202f")
 
 
-def calculer_cout_matiere(composant: Composant) -> float:
-    """Calcule le coût matière selon la forme et les dimensions."""
+def calculer_masse_matiere(composant: Composant) -> float:
+    """
+    Calcule la masse (kg) du brut selon la forme et les dimensions.
+    Utilisée à la fois pour le coût matière et pour les services facturés
+    au poids ("type_cout" = 'poids').
+    """
     if not composant.id_matiere_brut or not composant.forme_brut:
         return 0.0
 
     matiere = composant.matiere_brut
-    if not matiere or not matiere.poids_volumique or not matiere.prix_au_kg:
+    if not matiere or not matiere.poids_volumique:
         return 0.0
 
     volume_cm3 = 0.0
@@ -47,7 +51,19 @@ def calculer_cout_matiere(composant: Composant) -> float:
     if volume_cm3 <= 0:
         return 0.0
 
-    masse_kg = volume_cm3 * float(matiere.poids_volumique)
+    return volume_cm3 * float(matiere.poids_volumique)
+
+
+def calculer_cout_matiere(composant: Composant) -> float:
+    """Calcule le coût matière selon la forme et les dimensions."""
+    matiere = composant.matiere_brut
+    if not matiere or not matiere.prix_au_kg:
+        return 0.0
+
+    masse_kg = calculer_masse_matiere(composant)
+    if masse_kg <= 0:
+        return 0.0
+
     return round(masse_kg * float(matiere.prix_au_kg), 4)
 
 
@@ -66,6 +82,9 @@ def calculer_cout_operations(
         return 0.0
 
     cout_total = 0.0
+    # Computed once and reused by any 'poids' (per-kg) service in the
+    # routing — the weight always comes from the component's own raw stock.
+    masse_kg = calculer_masse_matiere(composant)
 
     for op in gamme.operations:
         # Coût machine + opérateur
@@ -82,15 +101,23 @@ def calculer_cout_operations(
                 charge = float(machine.charge_operateur) / 100.0
                 cout_total += duree_h * float(machine.cout_operateur) * charge
 
-        # Coût service
+        # Coût service — le mode de facturation (type_cout) détermine
+        # comment le coût est calculé :
+        #   - 'horaire' : temps d'exécution de l'opération × taux horaire
+        #   - 'poids'   : masse du brut du composant × prix au kg
+        #   - 'fixe'    : prix fixe par unité
         elif op.service:
             s = op.service
-            if s.cout_horaire:
+            type_cout = getattr(s, "type_cout", "horaire")
+
+            if type_cout == "poids" and s.cout_au_kg:
+                cout_total += masse_kg * quantite * float(s.cout_au_kg)
+            elif type_cout == "fixe" and s.cout_fixe:
+                cout_total += float(s.cout_fixe) * quantite
+            elif s.cout_horaire:
                 tps_exec = float(op.tps_execution or 0)
                 duree_h  = (tps_exec * quantite) / 60.0
                 cout_total += duree_h * float(s.cout_horaire)
-            elif s.cout_fixe:
-                cout_total += float(s.cout_fixe) * quantite
 
         # Coût pièce externe
         elif op.piece_externe:
@@ -173,10 +200,14 @@ def recalculer_assemblage(
 
         elif n.service:
             s = n.service
-            # Fixed cost takes priority; otherwise fall back to hourly rate × quantity
-            if s.cout_fixe:
+            type_cout = getattr(s, "type_cout", "horaire")
+            # NOTE: a service added directly to an assembly's BOM has no
+            # associated raw-stock weight (that only exists on a component),
+            # so a 'poids' service contributes 0 here — it only makes sense
+            # inside a component's manufacturing routing.
+            if type_cout == "fixe" and s.cout_fixe:
                 total += float(s.cout_fixe) * qte
-            elif s.cout_horaire:
+            elif type_cout == "horaire" and s.cout_horaire:
                 total += float(s.cout_horaire) * qte
 
     assemblage.prix_revient = round(total, 4)

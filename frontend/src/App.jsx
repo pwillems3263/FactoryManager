@@ -11,7 +11,7 @@ import Orders from './pages/Orders'
 import WorkOrders from './pages/WorkOrders'
 import ProductionTrack from './pages/ProductionTrack'
 import TimeTracking from './pages/TimeTracking'
-import Users from './pages/Users'
+import DbConfig from './pages/DbConfig'
 import Planning from './pages/Planning'
 
 function PrivateRoute({ children }) {
@@ -36,7 +36,8 @@ export default function App() {
         <Route path="/suivi" element={<PrivateRoute><ProductionTrack /></PrivateRoute>} />
         <Route path="/pointage" element={<PrivateRoute><TimeTracking /></PrivateRoute>} />
         <Route path="/planning" element={<PrivateRoute><Planning /></PrivateRoute>} />
-        <Route path="/utilisateurs" element={<PrivateRoute><Users /></PrivateRoute>} />
+        <Route path="/db-config" element={<PrivateRoute><DbConfig /></PrivateRoute>} />
+        <Route path="/utilisateurs" element={<Navigate to="/db-config" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>

@@ -29,7 +29,6 @@ class Composant(Base):
     id_composant  = Column(Integer, primary_key=True, autoincrement=True)
     reference     = Column(String(100), nullable=True)
     nom           = Column(String(255), nullable=False)
-    type          = Column(String(50), nullable=True)
     description   = Column(String, nullable=True)
     plan_url      = Column(String(500), nullable=True)
     prix_revient = Column(Numeric(12, 2), nullable=True)
@@ -95,7 +94,11 @@ class Service(Base):
     description  = Column(String(500), nullable=True)
     type_service = Column(String(20), nullable=False)
     # type_service : 'internal' / 'external'
+    type_cout    = Column(String(20), nullable=False, default='horaire', server_default='horaire')
+    # type_cout : 'horaire' (per hour) / 'poids' (per kg, computed from the
+    # component's raw stock weight) / 'fixe' (flat price per unit)
     cout_horaire = Column(Numeric(10, 2), nullable=True)   # €/h
+    cout_au_kg   = Column(Numeric(10, 4), nullable=True)   # €/kg
     cout_fixe    = Column(Numeric(10, 2), nullable=True)   # € fixe
     multi_taches = Column(Boolean, nullable=False, default=False, server_default='0')
     # multi_taches : si True, plusieurs opérations peuvent s'exécuter en même temps sur ce service

@@ -4,6 +4,7 @@ from .ressource import Machine, MatierePremiere, ArretMachine, TypeMachine, Hist
 from .gamme import Gamme, Operation, OperationMatiere
 from .production import OFAssemblage, OrdreFabrication, OperationPlanifiee, Rebut, LivraisonPartielle
 from .user import User
+from .settings import AppSetting
 
 
 __all__ = [
@@ -13,4 +14,5 @@ __all__ = [
     "Gamme", "Operation", "OperationMatiere",
     "OFAssemblage", "OrdreFabrication", "OperationPlanifiee", "Rebut", "LivraisonPartielle",
     "User",
+    "AppSetting",
 ]

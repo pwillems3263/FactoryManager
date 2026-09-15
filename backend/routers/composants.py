@@ -26,7 +26,6 @@ router = APIRouter(prefix="/composants", tags=["Composants"])
 class ComposantBase(BaseModel):
     reference:        Optional[str]   = None
     nom:              str
-    type:             Optional[str]   = None
     description:      Optional[str]   = None
     plan_url:         Optional[str]   = None
     id_matiere_brut:  Optional[int]   = None
@@ -54,7 +53,6 @@ class ComposantResponse(BaseModel):
     id_composant:     int
     reference:        Optional[str]
     nom:              str
-    type:             Optional[str]
     description:      Optional[str]
     plan_url:         Optional[str]
     prix_revient:     Optional[float]
@@ -145,7 +143,6 @@ def _to_response(c: Composant, db: Session) -> ComposantResponse:
         id_composant=c.id_composant,
         reference=c.reference,
         nom=c.nom,
-        type=c.type,
         description=c.description,
         plan_url=c.plan_url,
         prix_revient=float(c.prix_revient) if c.prix_revient else None,
@@ -219,6 +216,18 @@ def creer_composant(
     _user            = Depends(require_permission("components")),
 ):
     """Crée un nouveau composant."""
+    if payload.reference and payload.reference.strip():
+        existing = (
+            db.query(Composant)
+            .filter(Composant.reference.ilike(payload.reference.strip()))
+            .first()
+        )
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail=f'Reference "{payload.reference}" is already used by "{existing.nom}". '
+                       f"Please change the reference."
+            )
     c = Composant(**payload.model_dump())
     db.add(c)
     db.commit()
@@ -238,7 +247,13 @@ def modifier_composant(
     if not c:
         raise HTTPException(status_code=404, detail="Composant introuvable")
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    # Reference is immutable once created: components may already be referenced
+    # by assemblies, orders (OF) or BOMs, and changing it could silently break
+    # those links. Any change to "reference" in the payload is ignored.
+    update_data = payload.model_dump(exclude_unset=True)
+    update_data.pop("reference", None)
+
+    for field, value in update_data.items():
         setattr(c, field, value)
 
     db.commit()
@@ -407,7 +422,20 @@ def delete_operation(
     op = db.get(Operation, id_operation)
     if not op or op.gamme.id_composant != id_composant:
         raise HTTPException(404, "Step not found")
+    id_gamme = op.id_gamme
     db.delete(op); db.commit()
+
+    # Renumber remaining steps so "ordre" stays contiguous (1, 2, 3...)
+    # after the deleted step's gap.
+    remaining = (
+        db.query(Operation)
+        .filter(Operation.id_gamme == id_gamme)
+        .order_by(Operation.ordre)
+        .all()
+    )
+    for i, o in enumerate(remaining, start=1):
+        o.ordre = i
+    db.commit()
 
     recalculer_et_sauvegarder_composant(db, id_composant)
     _recalculer_assemblages_du_composant(db, id_composant)

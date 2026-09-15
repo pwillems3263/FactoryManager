@@ -31,7 +31,7 @@ const GROUPS = [
       { path: '/pieces-ext',   icon: '🔩', label: 'External Parts', ready: true },
       { path: '/matieres',     icon: '🧱', label: 'Material',       ready: true },
       { path: '/machines',     icon: '🏗️', label: 'Machines',       ready: true },
-      { path: '/utilisateurs', icon: '👥', label: 'Users',          ready: true },
+      { path: '/db-config',    icon: '🗄️', label: 'DB Configuration', ready: true },
     ],
   },
 ]

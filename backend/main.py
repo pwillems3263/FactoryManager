@@ -14,6 +14,8 @@ from routers import production_track as prod_router
 from routers import time_tracking as tt_router
 from routers import users as users_router
 from routers import planning as planning_router
+from routers import settings as settings_router
+from routers import db_admin as db_admin_router
 
 app = FastAPI(title="FactoryManager API", version="2.0.0")
 app.add_middleware(CORSMiddleware,
@@ -34,6 +36,8 @@ app.include_router(prod_router.router)
 app.include_router(tt_router.router)
 app.include_router(users_router.router)
 app.include_router(planning_router.router)
+app.include_router(settings_router.router)
+app.include_router(db_admin_router.router)
 
 @app.get("/", tags=["Status"])
 def health_check():

@@ -180,6 +180,18 @@ def recalculate_cost(id_assemblage: int, db: Session = Depends(get_db),
 @router.post("", response_model=AssemblageResponse, status_code=201)
 def create_assembly(payload: AssemblageCreate, db: Session = Depends(get_db),
                     _user=Depends(require_permission("assemblies"))):
+    if payload.reference and payload.reference.strip():
+        existing = (
+            db.query(Assemblage)
+            .filter(Assemblage.reference.ilike(payload.reference.strip()))
+            .first()
+        )
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail=f'Reference "{payload.reference}" is already used by "{existing.nom}". '
+                       f"Please change the reference."
+            )
     a = Assemblage(**payload.model_dump())
     db.add(a); db.commit(); db.refresh(a)
     return _to_response(a, db)
@@ -192,7 +204,14 @@ def update_assembly(id_assemblage: int, payload: AssemblageUpdate,
     a = db.get(Assemblage, id_assemblage)
     if not a:
         raise HTTPException(404, "Assembly not found")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+
+    # Reference is immutable once created: assemblies may already be referenced
+    # by orders (lignecommande) or nested BOMs, and changing it could silently
+    # break those links. Any change to "reference" in the payload is ignored.
+    update_data = payload.model_dump(exclude_unset=True)
+    update_data.pop("reference", None)
+
+    for field, value in update_data.items():
         setattr(a, field, value)
     db.commit(); db.refresh(a)
     return _to_response(a, db)

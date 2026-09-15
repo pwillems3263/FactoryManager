@@ -6,7 +6,8 @@ import { useDraggable } from '../hooks/useDraggable'
 
 const EMPTY_FORM = {
   code_produit: '', nom: '', description: '',
-  type_service: 'internal', cout_horaire: '', cout_fixe: '', multi_taches: false,
+  type_service: 'internal', type_cout: 'horaire',
+  cout_horaire: '', cout_au_kg: '', cout_fixe: '', multi_taches: false,
 }
 
 export default function Services() {
@@ -60,7 +61,9 @@ export default function Services() {
       nom:          selected.nom           || '',
       description:  selected.description   || '',
       type_service: selected.type_service  || 'internal',
+      type_cout:    selected.type_cout     || 'horaire',
       cout_horaire: selected.cout_horaire  || '',
+      cout_au_kg:   selected.cout_au_kg    || '',
       cout_fixe:    selected.cout_fixe     || '',
       multi_taches: selected.multi_taches  || false,
     })
@@ -90,8 +93,13 @@ export default function Services() {
       nom:          formData.nom,
       description:  formData.description  || null,
       type_service: formData.type_service,
-      cout_horaire: formData.cout_horaire !== '' ? parseFloat(formData.cout_horaire) : null,
-      cout_fixe:    formData.cout_fixe    !== '' ? parseFloat(formData.cout_fixe)    : null,
+      type_cout:    formData.type_cout,
+      // Only the cost field matching the chosen cost type is sent — the
+      // others are cleared so stale values from a previous mode don't
+      // linger and confuse the price calculation.
+      cout_horaire: formData.type_cout === 'horaire' && formData.cout_horaire !== '' ? parseFloat(formData.cout_horaire) : null,
+      cout_au_kg:   formData.type_cout === 'poids'   && formData.cout_au_kg   !== '' ? parseFloat(formData.cout_au_kg)   : null,
+      cout_fixe:    formData.type_cout === 'fixe'    && formData.cout_fixe    !== '' ? parseFloat(formData.cout_fixe)    : null,
       multi_taches: formData.multi_taches,
     }
     try {
@@ -148,17 +156,16 @@ export default function Services() {
               <th>Code</th>
               <th>Name</th>
               <th>Type</th>
-              <th>Hourly Rate (€/h)</th>
-              <th>Fixed Cost (€)</th>
+              <th>Cost</th>
               <th>Multi-task</th>
               <th>Components</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} className="table-loading">Loading...</td></tr>
+              <tr><td colSpan={6} className="table-loading">Loading...</td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={7} className="table-empty">No services found</td></tr>
+              <tr><td colSpan={6} className="table-empty">No services found</td></tr>
             ) : items.map((s) => (
               <tr
                 key={s.id_service}
@@ -173,8 +180,14 @@ export default function Services() {
                     {s.type_service}
                   </span>
                 </td>
-                <td className="td-prix">{s.cout_horaire != null ? `${parseFloat(s.cout_horaire).toFixed(2)} €` : '—'}</td>
-                <td className="td-prix">{s.cout_fixe != null ? `${parseFloat(s.cout_fixe).toFixed(2)} €` : '—'}</td>
+                <td className="td-prix">
+                  {s.type_cout === 'horaire' && s.cout_horaire != null && `${parseFloat(s.cout_horaire).toFixed(2)} €/h`}
+                  {s.type_cout === 'poids'   && s.cout_au_kg   != null && `${parseFloat(s.cout_au_kg).toFixed(4)} €/kg`}
+                  {s.type_cout === 'fixe'    && s.cout_fixe    != null && `${parseFloat(s.cout_fixe).toFixed(2)} €`}
+                  {!((s.type_cout === 'horaire' && s.cout_horaire != null) ||
+                     (s.type_cout === 'poids'   && s.cout_au_kg   != null) ||
+                     (s.type_cout === 'fixe'    && s.cout_fixe    != null)) && '—'}
+                </td>
                 <td className="td-center">{s.multi_taches ? '✅' : '—'}</td>
                 <td className="td-center">
                   {s.nb_composants > 0
@@ -201,8 +214,12 @@ export default function Services() {
           <div className="detail-grid">
             <div><label>Code</label><span>{selected.code_produit || '—'}</span></div>
             <div><label>Type</label><span>{selected.type_service}</span></div>
-            <div><label>Hourly Rate</label><span>{selected.cout_horaire != null ? `${parseFloat(selected.cout_horaire).toFixed(2)} €/h` : '—'}</span></div>
-            <div><label>Fixed Cost</label><span>{selected.cout_fixe != null ? `${parseFloat(selected.cout_fixe).toFixed(2)} €` : '—'}</span></div>
+            <div><label>Cost Type</label><span>{{ horaire: 'Per hour', poids: 'Per kg', fixe: 'Fixed price' }[selected.type_cout] || '—'}</span></div>
+            <div><label>Cost</label><span>
+              {selected.type_cout === 'horaire' && selected.cout_horaire != null && `${parseFloat(selected.cout_horaire).toFixed(2)} €/h`}
+              {selected.type_cout === 'poids'   && selected.cout_au_kg   != null && `${parseFloat(selected.cout_au_kg).toFixed(4)} €/kg`}
+              {selected.type_cout === 'fixe'    && selected.cout_fixe    != null && `${parseFloat(selected.cout_fixe).toFixed(2)} €`}
+            </span></div>
             <div><label>Multi-task</label><span>{selected.multi_taches ? 'Yes' : 'No'}</span></div>
             <div><label>Used in Components</label><span>{selected.nb_composants}</span></div>
             {selected.description && (
@@ -242,21 +259,52 @@ export default function Services() {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Hourly Rate (€/h)</label>
-                  <input type="number" step="0.01" name="cout_horaire" value={formData.cout_horaire} onChange={handleChange} placeholder="0.00" />
+                  <label>Cost Type *</label>
+                  <select name="type_cout" value={formData.type_cout} onChange={handleChange}>
+                    <option value="horaire">Per hour</option>
+                    <option value="poids">Per kg</option>
+                    <option value="fixe">Fixed price</option>
+                  </select>
                 </div>
               </div>
 
               <div className="form-row">
-                <div className="form-group">
-                  <label>Fixed Cost (€)</label>
-                  <input type="number" step="0.01" name="cout_fixe" value={formData.cout_fixe} onChange={handleChange} placeholder="0.00" />
-                </div>
+                {formData.type_cout === 'horaire' && (
+                  <div className="form-group">
+                    <label>Hourly Rate (€/h) *</label>
+                    <input type="number" step="0.01" name="cout_horaire" value={formData.cout_horaire} onChange={handleChange} placeholder="0.00" />
+                  </div>
+                )}
+                {formData.type_cout === 'poids' && (
+                  <div className="form-group">
+                    <label>Price per kg (€/kg) *</label>
+                    <input type="number" step="0.0001" name="cout_au_kg" value={formData.cout_au_kg} onChange={handleChange} placeholder="0.0000" />
+                  </div>
+                )}
+                {formData.type_cout === 'fixe' && (
+                  <div className="form-group">
+                    <label>Fixed Cost (€) *</label>
+                    <input type="number" step="0.01" name="cout_fixe" value={formData.cout_fixe} onChange={handleChange} placeholder="0.00" />
+                  </div>
+                )}
                 <div className="form-group" style={{ justifyContent: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
                   <input type="checkbox" name="multi_taches" id="multi_taches" checked={formData.multi_taches} onChange={handleChange} />
                   <label htmlFor="multi_taches" style={{ cursor: 'pointer' }}>Allow multi-task</label>
                 </div>
               </div>
+
+              {formData.type_cout === 'poids' && (
+                <p style={{ color: '#7f8c8d', fontSize: 12, marginTop: -8 }}>
+                  When this service is used in a component's routing, its cost is computed automatically
+                  from the raw stock weight — no operation time needs to be entered for that step.
+                </p>
+              )}
+              {formData.type_cout === 'fixe' && (
+                <p style={{ color: '#7f8c8d', fontSize: 12, marginTop: -8 }}>
+                  This service always costs the fixed amount per unit — no operation time needs to be
+                  entered for that step.
+                </p>
+              )}
 
               <div className="form-group">
                 <label>Description</label>

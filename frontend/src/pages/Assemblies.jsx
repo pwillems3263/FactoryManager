@@ -31,6 +31,7 @@ export default function Assemblies() {
   const [components, setComponents] = useState([])
   const [services, setServices]     = useState([])
   const [extParts, setExtParts]     = useState([])
+  const [allRefs, setAllRefs]       = useState([]) // [{reference, nom}] across ALL assemblies, for the reference datalist + duplicate check
   const dragForm = useDraggable()
   const dragBomForm = useDraggable()
 
@@ -65,7 +66,25 @@ export default function Assemblies() {
     } catch {}
   }, [])
 
-  useEffect(() => { fetchAssemblies(); fetchRefData() }, [fetchAssemblies, fetchRefData])
+  const fetchAllRefs = useCallback(async () => {
+    // Backend caps "limit" at 200, so page through all results instead of
+    // relying on a single oversized request (which the API rejects with a
+    // 422 error, silently leaving the datalist empty).
+    try {
+      let all = []
+      let p = 1
+      let pages = 1
+      do {
+        const { data } = await api.get('/assemblies', { params: { page: p, limit: 200 } })
+        all = all.concat(data.items)
+        pages = data.pages
+        p += 1
+      } while (p <= pages)
+      setAllRefs(all.map(a => ({ reference: a.reference || '', nom: a.nom, id_assemblage: a.id_assemblage })))
+    } catch { /* non-blocking */ }
+  }, [])
+
+  useEffect(() => { fetchAssemblies(); fetchRefData(); fetchAllRefs() }, [fetchAssemblies, fetchRefData, fetchAllRefs])
   useEffect(() => { if (selected) fetchBom(selected.id_assemblage); else setBom([]) }, [selected, fetchBom])
 
   useEffect(() => {
@@ -76,6 +95,21 @@ export default function Assemblies() {
   }, [bomType, components, services, extParts])
 
   const handleSearch = (e) => { setSearch(e.target.value); setPage(1) }
+
+  const handleReferenceChange = (e) => {
+    const value = e.target.value
+    setFormData(prev => {
+      const next = { ...prev, reference: value }
+      // When creating, picking an existing reference from the suggestion list
+      // also loads that assembly's name, so the user can see what they're
+      // about to collide with before changing the reference.
+      if (formMode === 'create') {
+        const match = allRefs.find(r => r.reference.trim().toLowerCase() === value.trim().toLowerCase())
+        if (match) next.nom = match.nom
+      }
+      return next
+    })
+  }
 
   const openCreate = () => { setFormData(EMPTY_FORM); setFormMode('create'); setFormError(''); setShowForm(true) }
   const openEdit = () => {
@@ -92,12 +126,20 @@ export default function Assemblies() {
   }
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); setSaving(true); setFormError('')
+    e.preventDefault(); setFormError('')
+    if (formMode === 'create' && formData.reference.trim()) {
+      const dup = allRefs.find(r => r.reference.trim().toLowerCase() === formData.reference.trim().toLowerCase())
+      if (dup) {
+        setFormError(`Reference "${formData.reference}" is already used by "${dup.nom}". Please change the reference.`)
+        return
+      }
+    }
+    setSaving(true)
     const payload = { nom: formData.nom, reference: formData.reference || null, description: formData.description || null, plan_url: formData.plan_url || null }
     try {
       if (formMode === 'create') await api.post('/assemblies', payload)
       else await api.put(`/assemblies/${selected.id_assemblage}`, payload)
-      setShowForm(false); dragForm.reset(); setSelected(null); fetchAssemblies()
+      setShowForm(false); dragForm.reset(); setSelected(null); fetchAssemblies(); fetchAllRefs()
     } catch (err) { setFormError(err.response?.data?.detail || 'Error saving assembly') }
     finally { setSaving(false) }
   }
@@ -272,8 +314,14 @@ export default function Assemblies() {
               {formError && <div className="alert alert-error">{formError}</div>}
               <div className="form-row">
                 <div className="form-group">
-                  <label>Reference</label>
-                  <input name="reference" value={formData.reference} onChange={e => setFormData(p => ({ ...p, reference: e.target.value }))} placeholder="e.g. ASM-001" />
+                  <label>Reference{formMode === 'edit' && <span style={{ fontWeight: 400, color: '#7f8c8d' }}> (locked after creation)</span>}</label>
+                  <input name="reference" value={formData.reference} onChange={handleReferenceChange}
+                    placeholder="e.g. ASM-001" list="assembly-references" autoComplete="off"
+                    disabled={formMode === 'edit'}
+                    title={formMode === 'edit' ? 'Reference cannot be changed once the assembly exists — it may already be used in orders or BOMs.' : undefined} />
+                  <datalist id="assembly-references">
+                    {allRefs.map(r => <option key={r.id_assemblage} value={r.reference} />)}
+                  </datalist>
                 </div>
                 <div className="form-group">
                   <label>Name *</label>

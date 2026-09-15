@@ -20,7 +20,9 @@ class ServiceBase(BaseModel):
     nom:          str
     description:  Optional[str]   = None
     type_service: str              = "internal"
+    type_cout:    str              = "horaire"   # "horaire" | "poids" | "fixe"
     cout_horaire: Optional[float] = None
+    cout_au_kg:   Optional[float] = None
     cout_fixe:    Optional[float] = None
     multi_taches: bool             = False
 
@@ -34,7 +36,9 @@ class ServiceUpdate(BaseModel):
     nom:          Optional[str]   = None
     description:  Optional[str]   = None
     type_service: Optional[str]   = None
+    type_cout:    Optional[str]   = None
     cout_horaire: Optional[float] = None
+    cout_au_kg:   Optional[float] = None
     cout_fixe:    Optional[float] = None
     multi_taches: Optional[bool]  = None
 
@@ -45,7 +49,9 @@ class ServiceResponse(BaseModel):
     nom:          str
     description:  Optional[str]
     type_service: str
+    type_cout:    str
     cout_horaire: Optional[float]
+    cout_au_kg:   Optional[float]
     cout_fixe:    Optional[float]
     multi_taches: bool
     nb_composants: int
@@ -61,6 +67,20 @@ class ServiceListResponse(BaseModel):
     pages: int
 
 
+VALID_COST_TYPES = {"horaire", "poids", "fixe"}
+
+
+def _validate_cost_fields(type_cout: str, cout_horaire, cout_au_kg, cout_fixe):
+    if type_cout not in VALID_COST_TYPES:
+        raise HTTPException(400, f"type_cout must be one of {sorted(VALID_COST_TYPES)}")
+    if type_cout == "horaire" and cout_horaire is None:
+        raise HTTPException(400, "cout_horaire is required when type_cout is 'horaire'")
+    if type_cout == "poids" and cout_au_kg is None:
+        raise HTTPException(400, "cout_au_kg is required when type_cout is 'poids'")
+    if type_cout == "fixe" and cout_fixe is None:
+        raise HTTPException(400, "cout_fixe is required when type_cout is 'fixe'")
+
+
 def _to_response(s: Service, db: Session) -> ServiceResponse:
     nb = db.query(Composant).filter(Composant.id_service == s.id_service).count()
     return ServiceResponse(
@@ -69,7 +89,9 @@ def _to_response(s: Service, db: Session) -> ServiceResponse:
         nom=s.nom,
         description=s.description,
         type_service=s.type_service,
+        type_cout=s.type_cout,
         cout_horaire=float(s.cout_horaire) if s.cout_horaire else None,
+        cout_au_kg=float(s.cout_au_kg) if s.cout_au_kg else None,
         cout_fixe=float(s.cout_fixe) if s.cout_fixe else None,
         multi_taches=s.multi_taches,
         nb_composants=nb,
@@ -110,6 +132,7 @@ def get_service(id_service: int, db: Session = Depends(get_db),
 @router.post("", response_model=ServiceResponse, status_code=201)
 def create_service(payload: ServiceCreate, db: Session = Depends(get_db),
                    _user=Depends(require_permission("services"))):
+    _validate_cost_fields(payload.type_cout, payload.cout_horaire, payload.cout_au_kg, payload.cout_fixe)
     s = Service(**payload.model_dump())
     db.add(s)
     db.commit()
@@ -124,7 +147,14 @@ def update_service(id_service: int, payload: ServiceUpdate,
     s = db.get(Service, id_service)
     if not s:
         raise HTTPException(404, "Service not found")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    updates = payload.model_dump(exclude_unset=True)
+    _validate_cost_fields(
+        updates.get("type_cout", s.type_cout),
+        updates.get("cout_horaire", s.cout_horaire),
+        updates.get("cout_au_kg", s.cout_au_kg),
+        updates.get("cout_fixe", s.cout_fixe),
+    )
+    for field, value in updates.items():
         setattr(s, field, value)
     db.commit()
     db.refresh(s)
